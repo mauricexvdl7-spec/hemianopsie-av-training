@@ -1,8 +1,11 @@
 /** Export als JSON (vollständig) und CSV (Durchgänge), Import zur Wiederherstellung (Spec 12). */
 import type { TrialRecord } from '../core/types';
-import type { Db, SessionRecord, Settings } from './db';
+import type { ControllerState } from '../core/controller';
+import type { Db, MapSnapshot, SessionRecord, Settings } from './db';
 
-export const EXPORT_SCHEMA = 'sehtraining-export/1';
+export const EXPORT_SCHEMA = 'sehtraining-export/2';
+/** Sicherungen der ersten Version werden weiterhin gelesen. */
+const EXPORT_SCHEMA_V1 = 'sehtraining-export/1';
 
 export interface ExportBundle {
   schema: typeof EXPORT_SCHEMA;
@@ -10,6 +13,8 @@ export interface ExportBundle {
   settings: Settings;
   sessions: SessionRecord[];
   trials: TrialRecord[];
+  controller: ControllerState | null;
+  mapSnapshots: MapSnapshot[];
 }
 
 export async function exportAll(db: Db, nowIso: string): Promise<ExportBundle> {
@@ -19,17 +24,17 @@ export async function exportAll(db: Db, nowIso: string): Promise<ExportBundle> {
     settings: await db.getSettings(),
     sessions: await db.listSessions(),
     trials: await db.listTrials(),
+    controller: await db.getController(),
+    mapSnapshots: await db.listMapSnapshots(),
   };
 }
 
 const hasStringId = (r: unknown, key: string): boolean =>
   typeof r === 'object' && r !== null && typeof (r as Record<string, unknown>)[key] === 'string';
 
-function isBundle(x: unknown): x is ExportBundle {
-  if (typeof x !== 'object' || x === null) return false;
-  const b = x as Partial<ExportBundle>;
+/** Gemeinsamer Teil beider Versionen: Einstellungen, Sitzungen, Durchgänge. */
+function hasBaseFields(b: Partial<Omit<ExportBundle, 'schema'>>): boolean {
   return (
-    b.schema === EXPORT_SCHEMA &&
     typeof b.settings === 'object' &&
     b.settings !== null &&
     Array.isArray(b.sessions) &&
@@ -39,11 +44,26 @@ function isBundle(x: unknown): x is ExportBundle {
   );
 }
 
+/** Prüft die Sicherung und bringt sie auf die Form von Version 2 (Version 1: kein Controller, keine Snapshots). */
+function parseBundle(x: unknown): Omit<ExportBundle, 'schema' | 'exportedAtIso'> | null {
+  if (typeof x !== 'object' || x === null) return null;
+  const b = x as Partial<Omit<ExportBundle, 'schema'>> & { schema?: unknown };
+  if (!hasBaseFields(b)) return null;
+  const base = { settings: b.settings!, sessions: b.sessions!, trials: b.trials! };
+  if (b.schema === EXPORT_SCHEMA_V1) return { ...base, controller: null, mapSnapshots: [] };
+  if (b.schema !== EXPORT_SCHEMA) return null;
+  const { controller, mapSnapshots } = b;
+  const controllerOk = controller === null || (typeof controller === 'object' && controller !== undefined && 'version' in controller);
+  if (!controllerOk || !Array.isArray(mapSnapshots) || !mapSnapshots.every((m) => hasStringId(m, 'sessionId'))) return null;
+  return { ...base, controller: controller ?? null, mapSnapshots };
+}
+
 /** Ersetzt alle vorhandenen Daten durch den Inhalt der Sicherung – atomar: bei einem Fehler bleibt alles beim Alten. */
 export async function importAll(db: Db, bundle: unknown): Promise<{ sessions: number; trials: number }> {
-  if (!isBundle(bundle)) throw new Error('Unbekanntes Format: Das ist keine Sicherung dieser App.');
-  await db.replaceAll({ settings: bundle.settings, sessions: bundle.sessions, trials: bundle.trials });
-  return { sessions: bundle.sessions.length, trials: bundle.trials.length };
+  const data = parseBundle(bundle);
+  if (!data) throw new Error('Unbekanntes Format: Das ist keine Sicherung dieser App.');
+  await db.replaceAll(data);
+  return { sessions: data.sessions.length, trials: data.trials.length };
 }
 
 export const CSV_COLUMNS = [
