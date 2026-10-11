@@ -1,0 +1,9 @@
+// Cloudflare-Workers-Konfiguration: liefert nur die gebaute PWA aus dist/ aus (kein Server-Code).
+// Der Name muss dem Projektnamen im Cloudflare-Dashboard entsprechen.
+{
+  "name": "hemianopsie-av-training",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
