@@ -110,6 +110,28 @@ describe('runTrial', () => {
     expect(f.draws.at(-1)!.state.blob).toBeNull();
   });
 
+  it.each(['hidden', 'resize', 'stall'] as const)('Abbruch %s → geplanter Ton wird abgebrochen (Ton nie länger als 1 s nach dem Abbruch)', async (reason) => {
+    const f = fakeDeps();
+    const p = runTrial(samplePlan({ soaMs: -200 }), f.deps, ISO);
+    f.advanceTo(T0 - 100); // Ton ist schon geplant (Beginn T0 - 200), Licht noch nicht sichtbar
+    expect(f.deps.scheduleSound).toHaveBeenCalledTimes(1);
+    if (reason === 'stall') f.jumpTo(T0 + 1000);
+    else f.abort(reason);
+    expect((await p).outcome).toBe('aborted');
+    expect(f.deps.cancelSound).toHaveBeenCalledTimes(1);
+  });
+
+  it('normales Ende (Treffer, verpasst, Vorwegnahme) bricht keinen Ton ab', async () => {
+    for (const respondAt of [T0 + 400, null, T0 - 100]) {
+      const f = fakeDeps();
+      const p = runTrial(samplePlan(), f.deps, ISO);
+      if (respondAt !== null) f.respondAt(respondAt);
+      f.advanceTo(T0 + 2100);
+      await p;
+      expect(f.deps.cancelSound).not.toHaveBeenCalled();
+    }
+  });
+
   it('Hüllkurve im gezeichneten Fleck', async () => {
     const f = fakeDeps();
     const p = runTrial(samplePlan(), f.deps, ISO);

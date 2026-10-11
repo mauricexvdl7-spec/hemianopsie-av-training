@@ -77,6 +77,7 @@ describe('createBrowserDeps.scheduleSound', () => {
       nowSec: () => 5,
       outputLatencySec: () => 0.05,
       scheduleBurst: vi.fn(),
+      cancelBursts: vi.fn(),
     };
   }
   const deps = (audio: ReturnType<typeof fakeAudio>) =>
@@ -91,6 +92,12 @@ describe('createBrowserDeps.scheduleSound', () => {
     const a = fakeAudio(false);
     expect(deps(a).scheduleSound(samplePlan(), performance.now() + 100)).toBe(false);
     expect(a.scheduleBurst).not.toHaveBeenCalled();
+  });
+
+  it('cancelSound bricht die geplanten Töne der Audio-Engine ab', () => {
+    const a = fakeAudio(true);
+    deps(a).cancelSound();
+    expect(a.cancelBursts).toHaveBeenCalledTimes(1);
   });
 
   it('plant den Ton bei laufendem Kontext', () => {

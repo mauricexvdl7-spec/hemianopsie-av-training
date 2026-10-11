@@ -24,6 +24,8 @@ export interface RunnerDeps {
   draw(state: DrawState): void;
   /** Plant den Ton; Beginn bei t0Ms + plan.soaMs auf der now()-Zeitachse. Liefert, ob er wirklich geplant wurde. */
   scheduleSound(plan: TrialPlan, t0Ms: number): boolean;
+  /** Bricht einen schon geplanten oder laufenden Ton ab (bei Abbruch des Durchgangs, Spec 10). */
+  cancelSound(): void;
   input: { arm(cb: (e: ResponseEvent) => void): void; disarm(): void };
   geometry(): Geometry;
   signals: { onAbort(cb: (reason: AbortReason) => void): () => void };
@@ -59,6 +61,7 @@ export function runTrial(plan: TrialPlan, deps: RunnerDeps, startedAtIso: string
       finished = true;
       deps.input.disarm();
       unsubscribe();
+      if (abortReason) deps.cancelSound();
       deps.draw({ fixation: true, blob: null });
       const rtMs = responseMs === null ? null : responseMs - t0;
       resolve({

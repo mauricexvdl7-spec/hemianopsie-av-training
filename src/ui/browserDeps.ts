@@ -92,6 +92,7 @@ export function createBrowserDeps(args: {
       });
       return true;
     },
+    cancelSound: () => args.audio.cancelBursts(),
     input: args.input,
     geometry: getGeometry,
     signals: createAbortSignals(window, document),

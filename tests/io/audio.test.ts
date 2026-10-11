@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { AudioEngine, MASTER_GAIN_CAP, initialVolume } from '../../src/io/audio';
 
 function param(value = 0) {
-  return { value, setValueAtTime: vi.fn(), setValueCurveAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() };
+  return { value, setValueAtTime: vi.fn(), setValueCurveAtTime: vi.fn(), setTargetAtTime: vi.fn(), cancelScheduledValues: vi.fn(), linearRampToValueAtTime: vi.fn(), exponentialRampToValueAtTime: vi.fn() };
 }
 function node(extra: Record<string, unknown> = {}) {
   return { connect: vi.fn((n: unknown) => n), disconnect: vi.fn(), ...extra };
@@ -11,6 +11,8 @@ function node(extra: Record<string, unknown> = {}) {
 /** Minimaler Fake eines AudioContext; merkt sich erzeugte Gain-Knoten. */
 function fakeContext(state: string) {
   const gains: Array<{ gain: ReturnType<typeof param> }> = [];
+  const sources: Array<{ start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; onended: (() => void) | null }> = [];
+  const oscillators: Array<{ start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }> = [];
   const ctx = {
     state,
     currentTime: 0,
@@ -26,12 +28,20 @@ function fakeContext(state: string) {
     }),
     createDynamicsCompressor: vi.fn(() => node({ threshold: param(), ratio: param(), knee: param(), attack: param(), release: param() })),
     createBuffer: vi.fn((ch: number, len: number) => ({ getChannelData: () => new Float32Array(len), duration: len / 48000, numberOfChannels: ch })),
-    createBufferSource: vi.fn(() => node({ buffer: null, start: vi.fn(), stop: vi.fn() })),
-    createOscillator: vi.fn(() => node({ frequency: param(), type: 'sine', start: vi.fn(), stop: vi.fn() })),
+    createBufferSource: vi.fn(() => {
+      const n = node({ buffer: null, start: vi.fn(), stop: vi.fn(), onended: null }) as unknown as (typeof sources)[number];
+      sources.push(n);
+      return n;
+    }),
+    createOscillator: vi.fn(() => {
+      const n = node({ frequency: param(), type: 'sine', start: vi.fn(), stop: vi.fn() }) as unknown as (typeof oscillators)[number];
+      oscillators.push(n);
+      return n;
+    }),
     createPanner: vi.fn(() => node({ positionX: param(), positionY: param(), positionZ: param() })),
     createStereoPanner: vi.fn(() => node({ pan: param() })),
   };
-  return { ctx, gains };
+  return { ctx, gains, sources, oscillators };
 }
 
 describe('AudioEngine', () => {
@@ -90,6 +100,74 @@ describe('AudioEngine', () => {
     eng.apply({ outputMode: 'speakers', volume: 0.5, balance: 0 });
     eng.scheduleBurst({ pos: { side: 'L', eccDeg: 10, angleDeg: 0 }, gainDb: 0, atSec: 2, rampMs: 150, plateauMs: 300 });
     expect(ctx.createStereoPanner).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('AudioEngine Abbruch des Tons (Spec 10: Ton endet spätestens 1 s nach dem Abbruch)', () => {
+  const burst = { pos: { side: 'L' as const, eccDeg: 10, angleDeg: 0 }, gainDb: 0, rampMs: 150, plateauMs: 300 };
+
+  it('cancelBursts stoppt alle geplanten Töne und blendet sie in ~20 ms aus', async () => {
+    const { ctx, gains, sources } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    await eng.ensureRunning();
+    eng.scheduleBurst({ ...burst, atSec: 3 });
+    eng.scheduleBurst({ ...burst, atSec: 4 });
+    expect(sources).toHaveLength(2);
+    // Gain-Knoten: [0] Master, danach je Ton Hüllkurve und Ausblendung
+    const fades = [gains[2]!, gains[4]!];
+    ctx.currentTime = 3.1;
+    sources.forEach((s) => s.stop.mockClear());
+    eng.cancelBursts();
+    for (const s of sources) {
+      expect(s.stop).toHaveBeenCalledTimes(1);
+      const at = s.stop.mock.calls[0]![0] as number;
+      expect(at).toBeGreaterThanOrEqual(3.1);
+      expect(at).toBeLessThanOrEqual(3.1 + 0.05);
+    }
+    for (const f of fades) {
+      expect(f.gain.cancelScheduledValues).toHaveBeenCalledWith(3.1);
+      expect(f.gain.setTargetAtTime).toHaveBeenCalledTimes(1);
+      const [target, at, tau] = f.gain.setTargetAtTime.mock.calls[0] as [number, number, number];
+      expect([target, at]).toEqual([0, 3.1]);
+      expect(tau * 4).toBeLessThanOrEqual(0.025); // ≈ 20 ms bis 98 %
+    }
+  });
+
+  it('beendete Töne werden nicht mehr abgebrochen; ohne Töne und ohne Kontext ist cancelBursts folgenlos', async () => {
+    const { ctx, sources } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    expect(() => eng.cancelBursts()).not.toThrow();
+    await eng.ensureRunning();
+    eng.scheduleBurst({ ...burst, atSec: 1 });
+    sources[0]!.onended?.();
+    sources[0]!.stop.mockClear();
+    eng.cancelBursts();
+    expect(sources[0]!.stop).not.toHaveBeenCalled();
+    expect(() => eng.cancelBursts()).not.toThrow();
+  });
+
+  it('ein zweiter Aufruf bricht nichts doppelt ab', async () => {
+    const { ctx, sources } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    await eng.ensureRunning();
+    eng.scheduleBurst({ ...burst, atSec: 1 });
+    sources[0]!.stop.mockClear();
+    eng.cancelBursts();
+    eng.cancelBursts();
+    expect(sources[0]!.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('playChime tut nichts, solange der Kontext nicht läuft (kein Aufstauen von Glocken)', async () => {
+    const { ctx, oscillators } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    eng.playChime(); // noch kein Kontext
+    await eng.ensureRunning();
+    ctx.state = 'interrupted';
+    eng.playChime();
+    expect(oscillators).toHaveLength(0);
+    ctx.state = 'running';
+    eng.playChime();
+    expect(oscillators).toHaveLength(2);
   });
 });
 

@@ -16,6 +16,10 @@ export const NOISE_RMS = 0.25;
 export const CHIME_PEAK = 0.2;
 const NOISE_SECONDS = 2;
 const CURVE_POINTS = 128;
+/** Zeitkonstante der Ausblendung bei Abbruch: nach 4·τ ≈ 20 ms ist der Ton auf 2 % gefallen. */
+const CANCEL_TAU_SEC = 0.005;
+/** Nach dieser Zeit wird die Quelle bei Abbruch gestoppt (nach der Ausblendung). */
+const CANCEL_STOP_SEC = 0.03;
 const RAD = Math.PI / 180;
 
 export interface AudioSettings {
@@ -62,6 +66,8 @@ export class AudioEngine {
   private master: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private settings: AudioSettings = { outputMode: 'headphones', volume: 0.5, balance: 0 };
+  /** Geplante oder laufende Rauschimpulse; `fade` ist der Knoten, über den ein Abbruch sie ausblendet. */
+  private readonly bursts = new Set<{ src: AudioBufferSourceNode; fade: GainNode }>();
 
   constructor(private readonly ctxFactory: () => AudioContext = defaultContext) {}
 
@@ -119,17 +125,44 @@ export class AudioEngine {
       curve[i] = peak * envelope((i / (CURVE_POINTS - 1)) * durMs, opts.rampMs, opts.plateauMs);
     }
     env.gain.setValueCurveAtTime(curve, opts.atSec, durMs / 1000);
+    // Eigener Ausblendknoten: eine laufende Hüllkurve lässt sich nicht weich abbrechen, ein Abbruch würde knacken.
+    const fade = ctx.createGain();
+    fade.gain.value = 1;
     src.connect(env);
-    this.connectSpatial(env, opts.pos).connect(master);
+    env.connect(fade);
+    this.connectSpatial(fade, opts.pos).connect(master);
     const offset = Math.random() * Math.max(0, NOISE_SECONDS - durMs / 1000 - 0.01);
     src.start(opts.atSec, offset);
     src.stop(opts.atSec + durMs / 1000 + 0.05);
+    const burst = { src, fade };
+    this.bursts.add(burst);
+    src.onended = () => this.bursts.delete(burst);
+  }
+
+  /**
+   * Bricht alle geplanten und laufenden Rauschimpulse ab: in etwa 20 ms ausblenden, dann die Quellen stoppen
+   * (Spec 10: nach einem Abbruch darf kein Ton länger als 1 s weiterklingen).
+   */
+  cancelBursts(): void {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    for (const { src, fade } of this.bursts) {
+      try {
+        fade.gain.cancelScheduledValues(t);
+        fade.gain.setTargetAtTime(0, t, CANCEL_TAU_SEC);
+        src.stop(t + CANCEL_STOP_SEC);
+      } catch {
+        // Quelle schon beendet: nichts mehr zu tun
+      }
+    }
+    this.bursts.clear();
   }
 
   /** Weicher Glockenton als Rückmeldung bei einem Treffer (Spitze CHIME_PEAK). */
   playChime(): void {
     const { ctx, master } = this;
-    if (!ctx || !master) return;
+    if (!ctx || !master || !this.isRunning()) return; // steht die Audio-Uhr, würden sich Glocken stauen
     const t = ctx.currentTime + 0.01;
     const env = ctx.createGain();
     env.gain.value = 0;

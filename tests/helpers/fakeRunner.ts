@@ -24,6 +24,7 @@ export function fakeDeps() {
       draws.push({ t: now, state });
     },
     scheduleSound: vi.fn(),
+    cancelSound: vi.fn(),
     input: {
       arm: (cb) => {
         armed = cb;
