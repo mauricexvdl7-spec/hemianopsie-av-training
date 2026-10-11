@@ -355,6 +355,7 @@ Nach jedem Meilenstein: Commit, Push, kurzer Bericht an den Angehörigen, README
 6. Phasenwechsel nach benötigter Reizstärke statt nach Trefferquote (Abweichung vom Prompt, begründet in 9). Nur-Licht-Anteil von 10 % in jeder Phase.
 7. Eigenes öffentliches Repo, nur Code im Repo. Seit 11.10.2026 `mauricexvdl7-spec/hemianopsie-av-training`, Auslieferung über Cloudflare (GitHub Pages scheiterte an einer Kontosperre).
 8. Tempo ruhiger (Nutzer, 11.10.2026, nach erstem Test: „Licht zu kurz, zu wenig Pause“): Licht 1,0 s sichtbar (Plateau 700 ms), Wartezeit 1,5–3,5 s, Antwortfenster mindestens 2,0 s. Alle drei Werte einstellbar; die Sicherheitsregel ≥ 1 s zwischen zwei Reizen bleibt unverändert. Folge: Bei längerem Licht kann er öfter vor dem Ende zum Reiz blicken; das stärkt das Erkunden nach links, macht die Karte aber etwas großzügiger. Ab Meilenstein 4 (Kamera) wird das über den ersten Blicksprung sichtbar.
+9. Gestaltung (Nutzer, 11.10.2026: „sieht hart nach Win95 aus“): ruhiger Feinschliff mit Akzentfarbe gedämpftes Petrol. Grundton aller Bildschirme bleibt Dunkelgrau #3c3c3c (keine Helligkeitssprünge beim Wechsel ins Training), Trainingsbildschirm (Kreuz, Lichtfleck) bleibt unverändert. Start mit Begrüßung nach Tageszeit, Ergebnis als Karte, Admin-Seiten als Karten mit Schritt-Anzeige.
 
 ## 19. Bewusst nicht enthalten
 

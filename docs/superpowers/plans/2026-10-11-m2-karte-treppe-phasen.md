@@ -418,3 +418,29 @@ tests/core/{map,guessRate,staircase,selector,phases,controller,sim,acceptance}.t
 - [ ] **Step 5: README** — Abschnitt „Tempo einstellen“ (2–3 Sätze).
 - [ ] **Step 6: Commit** `feat: ruhigeres Tempo, einstellbar (Licht, Pause, Antwortzeit)`
 
+---
+
+### Task 10: Gestaltung – ruhiger Feinschliff, Akzent Petrol (Nutzerentscheidung 9, 11.10.2026)
+
+**Files:**
+- Modify: `src/styles.css` (Design-Tokens, Komponentenstile), `src/ui/patient/StartScreen.tsx`, `src/ui/patient/TrainingScreen.tsx` (nur Pause-/Ergebnisansicht, **nicht** die Bühne), `src/ui/setup/**` (Schritt-Anzeige, Karten), `src/ui/admin/**` (Karten-Layout), `index.html` (theme-color unverändert #3c3c3c)
+- Create: `src/ui/greeting.ts`
+- Test: `tests/ui/greeting.test.ts`, bestehende UI-Tests grün halten
+
+**Interfaces / Werte:**
+- Design-Tokens in `:root` (CSS-Variablen): `--bg #3c3c3c` (unverändert, alle Bildschirme), `--surface #454545`, `--surface-2 #4f4f4f`, `--border #5c5c5c`, `--text #e6e6e6`, `--muted #b8b8b8`, `--accent #4f9a94` (gedämpftes Petrol), `--accent-strong #5fb0a9`, `--accent-ink #10302d` (Text auf Akzentflächen); Radius 14 px (Knöpfe/Karten), 999 px (runder Start); Schatten nur dezent (`0 6px 24px rgba(0,0,0,.25)`). Kein reines Schwarz/Weiß, keine gesättigten Farben, keine großflächig hellen Flächen (größte helle Fläche: Start-Knopf).
+- Kontrast: Text auf `--bg`/`--surface` ≥ 7:1 (Patient) bzw. ≥ 4,5:1 (Admin); Text auf `--accent` ≥ 4,5:1 → Test berechnet die WCAG-Kontraste aus den Token-Werten (Token-Werte zusätzlich als TS-Konstanten in `src/ui/theme.ts` exportieren und in `styles.css` identisch verwenden).
+- `greeting.ts`: `export function greeting(d: Date): string` → 5–10:59 „Guten Morgen“, 11–17:59 „Guten Tag“, 18–22:59 „Guten Abend“, sonst „Hallo“; `export function formatDateDe(d: Date): string` → z. B. „Sonntag, 11. Oktober“.
+- **Start:** rechts der Mitte gestapelt: Begrüßung (56 px), Datum (32 px, `--muted`), runder Start-Knopf (Durchmesser wie bisher, Petrol-Verlauf `--accent`→`--accent-strong`, weicher Glow, Text „Start“ in `--accent-ink`, 64 px fett), darunter klein „Lautstärke etwa halb“ (28 px, `--muted`). Weiterhin: Tippen irgendwo startet (onClick), keine Bedienelemente links.
+- **Ergebnis:** Karte rechts der Mitte, große Zahl „X von Y“ (96 px), Satz darüber („Heute gefunden“), schmaler Balken X/Y in Petrol, Hinweis „Tippe, um zurückzugehen“; Einblenden 300 ms (Opazität, keine Bewegung über 8 px).
+- **Pause/Hinweise** („Pause. Tippe zum Weitermachen.“, „Bitte das iPad quer halten.“, Fehler): gleiche Karte, großer Text.
+- **Admin/Einrichtung:** Inhalt zentriert, max. 760 px; jeder Abschnitt eine Karte (`--surface`, Rand `--border`); Primärknopf Petrol, Sekundärknopf Kontur; Eingabefelder und Schieberegler gestaltet (Petrol-Daumen, `accent-color`); Assistent mit Schritt-Anzeige „Schritt 2 von 4“ und Punkten; Überschriften 28 px, Fließtext 20 px, Hinweise `--muted`.
+- **Unverändert:** Trainingsbühne (Canvas, Kreuz, Fleck), alle Texte/Logik, Bedienung per onClick, Farben auf der Bühne.
+
+- [ ] **Step 1: Failing tests** — `greeting` an den Grenzen (4:59 „Hallo“, 5:00 „Guten Morgen“, 10:59, 11:00, 17:59, 18:00, 22:59, 23:00), `formatDateDe(new Date(2026, 9, 11))` = „Sonntag, 11. Oktober“; Theme-Kontraste (s. o.) und „kein #000000/#ffffff“; StartScreen rendert Begrüßung + Start-Knopf und startet weiterhin bei click, nicht bei pointerdown.
+- [ ] **Step 2: Run → FAIL**
+- [ ] **Step 3: Implementieren**
+- [ ] **Step 4: Run → PASS; typecheck; build**
+- [ ] **Step 5: Screenshots** (Playwright, 1180×820): Start, Ergebnis, Pause, Einrichtung Schritt 2, Export-Seite, Testseite → `.work/design/*.png` (nicht committen) und im Bericht auflisten.
+- [ ] **Step 6: Commit** `feat(ui): ruhiger Feinschliff mit Akzent Petrol`
+
