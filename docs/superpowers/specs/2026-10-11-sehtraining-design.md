@@ -134,7 +134,7 @@ p(Treffer | L, θ) = γ + (1 − γ − λ) · 1 / (1 + exp(−(L − θ) / s))
 mit s = 1 Stufe und λ = 0,04. Dabei ist γ die Rate-Wahrscheinlichkeit. Sie wird aus den Durchgängen ohne Reiz als Beta(1, 19)-Posterior geschätzt (Mittelwert, Prior ≈ 5 %).
 
 **Update** bei einem Durchgang am Ort x mit Stufe L und Antwort r:
-- Jeder Punkt j bekommt w_j · log p(r | L, θ) auf seine Log-Gewichte, mit w_j = exp(−d(x, j)² / (2 · 4°²)).
+- Jeder Punkt j bekommt w_j · log p(r | L, θ) auf seine Log-Gewichte, mit w_j = exp(−d(x, j)² / (2 · 1°²)). Der Kern ist bewusst schmal (Raster 5°): Ein breiterer Kern (4°) verwischt die scharfe Grenze und zieht blinde Punkte neben sehenden Punkten auf scheinbar prüfbare Schwellen (Simulation 11.10.2026).
 - Gewichte w_j < 0,05 werden ignoriert.
 - Der Abstand d ist der Winkelabstand zwischen den Richtungen.
 
@@ -153,7 +153,7 @@ Nach jeder Sitzung wird ein Snapshot der Karte gespeichert.
 ## 8. Ortswahl (`core/selector`) und Treppe (`core/staircase`)
 
 **Ortswahl für linke Durchgänge:**
-- Für jeden linken Punkt j: p_j bei der aktuellen Stufe seiner Region und die Unsicherheit u_j.
+- Für jeden linken Punkt j: p_j bei seiner dargebotenen Stufe L_j (siehe Treppe) und die Unsicherheit u_j.
 - Score_j = u_j · exp(−((p_j − 0,625) / 0,15)²).
 - Mit Wahrscheinlichkeit 0,85 wird proportional zum Score gezogen, sonst gleichverteilt über alle linken Punkte.
 - Derselbe Punkt kommt nicht zweimal direkt hintereinander.
@@ -164,6 +164,7 @@ Nach jeder Sitzung wird ein Snapshot der Karte gespeichert.
 - Je Region gilt 2-down-1-up auf der Stufe. Bis zur ersten Umkehr wird um 2 Stufen verstellt, danach um 1. Die Grenzen sind 0 und 11. Ziel sind ≈ 70,7 % Treffer.
 - Der Zustand (Stufe, Zähler, Umkehrungen) bleibt über Sitzungen erhalten.
 - Die Startstufe ist die Mitte (6).
+- Dargebotene Stufe am Punkt j: L_j = Stufe seiner Region, begrenzt auf round(θ̂_j) ± 1 und auf 0…11 (θ̂_j = Posterior-Mittel der Karte). Eine Region mischt sehende, Grenz- und blinde Punkte; ohne diese Begrenzung klebt ihre Treppe am Deckel 11 und prüft sehende Punkte mit p ≈ 1. Die Treppe bewegt sich weiter nach Treffer und Fehlversuch dieser Durchgänge.
 - Für die Treppe zählen nur linke Durchgänge mit Reiz und ohne Falsch-Ton.
 - Rechte Durchgänge laufen auf der Referenzstufe.
 
@@ -184,10 +185,10 @@ Nach jeder Sitzung wird ein Snapshot der Karte gespeichert.
 
 **Wechselkriterium** (geprüft am Sitzungsende). Die Trefferquote eignet sich nicht, weil die Treppe sie konstant hält. Maßgeblich ist die **benötigte Reizstärke**. Weiter zur nächsten Phase bzw. Unterstufe geht es, wenn alle Bedingungen gelten:
 1. Mindestens 3 abgeschlossene Sitzungen (≥ 10 Minuten) in der aktuellen Stufe, in Phase 1 mindestens 5.
-2. Die mittlere Treppenstufe links (Mittel über Regionen und Durchgänge der Sitzung) schwankt über die letzten 3 Sitzungen um höchstens 1,0 und ist in der letzten Sitzung nicht höher als in der ersten der drei.
+2. Die mittlere dargebotene Stufe links (Mittel über die Treppen-Durchgänge der Sitzung) schwankt über die letzten 3 Sitzungen um höchstens 1,0 und ist in der letzten Sitzung nicht höher als in der ersten der drei.
 3. Die Trefferquote links (ohne Falsch-Ton) liegt in den letzten 3 Sitzungen jeweils bei mindestens 60 %.
 
-**Rückschritt:** Liegt die mittlere Treppenstufe nach einem Wechsel in 3 aufeinanderfolgenden Sitzungen um mehr als 2,0 über dem Wert vor dem Wechsel, geht es eine Unterstufe zurück. Phase 1 hat keinen Rückschritt. Nach einem Rückschritt ist frühestens nach weiteren 3 Sitzungen wieder ein Wechsel möglich.
+**Rückschritt:** Liegt die mittlere dargebotene Stufe nach einem Wechsel in 3 aufeinanderfolgenden Sitzungen um mehr als 2,0 über dem Wert vor dem Wechsel, geht es eine Unterstufe zurück. Phase 1 hat keinen Rückschritt. Nach einem Rückschritt ist frühestens nach weiteren 3 Sitzungen wieder ein Wechsel möglich.
 
 Im PIN-Bereich kann die Phase von Hand gesetzt werden. Das wird protokolliert. Phasenwechsel erscheinen in allen Verläufen als senkrechte Linien.
 
@@ -323,7 +324,7 @@ Eine Sitzung ist standardmäßig 25 Minuten Lichttraining plus 5 Minuten Alltags
 **Abnahmetests:**
 - **Karte:** Nach 5 simulierten Sitzungen zu je 250 Durchgängen ist der RMSE zwischen geschätzter und wahrer Schwelle an den Rasterpunkten mit wahrer Schwelle ≤ 11 höchstens 1,5 Stufen.
 - **Ortswahl:** Ab Sitzung 3 liegen mindestens 50 % der linken Durchgänge an Punkten, deren wahres p bei der gezogenen Stufe zwischen 0,3 und 0,9 liegt.
-- **Lernen:** Mit eingebauter Lernkurve sinkt die geschätzte mittlere Schwelle in der Grenzzone zwischen Sitzung 5 und 30 um mindestens 1 Stufe. Ohne Lernkurve ändert sie sich um höchstens 0,5.
+- **Lernen:** Bei fester Phase 1 (konstanter Tonanteil) sinkt mit eingebauter Lernkurve die geschätzte mittlere Schwelle in der Grenzzone zwischen Sitzung 5 und 40 um mindestens 0,8 Stufen. Ohne Lernkurve ändert sie sich um höchstens 0,5. (Begründung: Die Karte zählt Tondurchgänge mit, ein sinkender Tonanteil nach Phasenwechseln hebt θ̂ um bis zu 0,5; das Vergessen mit H = 7 lässt die Karte der noch laufenden Lernkurve um etwa 0,5 Stufen nachlaufen. Der phasenübergreifende Fortschritt wird über die Nur-Licht-Durchgänge gemessen, siehe 9.)
 - **Treppe:** Sie konvergiert auf ≈ 70,7 % (Simulation mit fester Schwelle: 0,65–0,76 über 2000 Durchgänge). Grenzen und Schrittweiten werden eingehalten.
 - **Phasen:** Wechsel, kein Wechsel und Rückschritt an konstruierten Sitzungsfolgen. Anteile für Falsch-Ton und Nur-Licht liegen im Toleranzband.
 - **Geometrie:** Hin- und Rückrechnung, Referenzwerte.
@@ -356,6 +357,7 @@ Nach jedem Meilenstein: Commit, Push, kurzer Bericht an den Angehörigen, README
 7. Eigenes öffentliches Repo, nur Code im Repo. Seit 11.10.2026 `mauricexvdl7-spec/hemianopsie-av-training`, Auslieferung über Cloudflare (GitHub Pages scheiterte an einer Kontosperre).
 8. Tempo ruhiger (Nutzer, 11.10.2026, nach erstem Test: „Licht zu kurz, zu wenig Pause“): Licht 1,0 s sichtbar (Plateau 700 ms), Wartezeit 1,5–3,5 s, Antwortfenster mindestens 2,0 s. Alle drei Werte einstellbar; die Sicherheitsregel ≥ 1 s zwischen zwei Reizen bleibt unverändert. Folge: Bei längerem Licht kann er öfter vor dem Ende zum Reiz blicken; das stärkt das Erkunden nach links, macht die Karte aber etwas großzügiger. Ab Meilenstein 4 (Kamera) wird das über den ersten Blicksprung sichtbar.
 9. Gestaltung (Nutzer, 11.10.2026: „sieht hart nach Win95 aus“): ruhiger Feinschliff mit Akzentfarbe gedämpftes Petrol. Grundton aller Bildschirme bleibt Dunkelgrau #3c3c3c (keine Helligkeitssprünge beim Wechsel ins Training), Trainingsbildschirm (Kreuz, Lichtfleck) bleibt unverändert. Start mit Begrüßung nach Tageszeit, Ergebnis als Karte, Admin-Seiten als Karten mit Schritt-Anzeige.
+10. Planer nach Simulationsstudie (Nutzer, 11.10.2026): Glättungskern 1° statt 4°; dargebotene Stufe je Punkt auf round(θ̂) ± 1 begrenzt; Phasenkriterium und Rückschritt über die mittlere dargebotene Stufe; Lernkriterium der Abnahme bei fester Phase 1 über Sitzung 5→40 mit ≥ 0,8 Stufen. Gemessen über 60 Seeds mit unverändertem Probanden: Karte RMSE 0,53–0,99, Ortswahl 0,72–0,87, Trefferquote links 62–64 %, Phasen erreichen 2–4b (vorher: dauerhaft Phase 1, Trefferquote ≈ 51 %). Bekannter Kompromiss: mehr Durchgänge an gerade noch sehenden Punkten, Grenzanteil steigt nur leicht (0,38–0,47 → 0,44–0,50); eine Gewichtung zur Grenze ist eine mögliche spätere Ergänzung.
 
 ## 19. Bewusst nicht enthalten
 
