@@ -11,7 +11,8 @@ export const SIGMA_BASE_DEG = 0.5;
 export const SIGMA_MAX_DEG = 1.5;
 export const BG_SRGB = 0x3c;
 export const RAMP_MS = 150;
-export const PLATEAU_MS = 300;
+/** Standard-Plateau; einstellbar über `TimingSettings.plateauMs` (siehe timing.ts). */
+export const PLATEAU_MS = 700;
 
 /** Stufen 0–8: Kontrast logarithmisch von 0,05 bis 4,0 bei σ = 0,5°. Stufen 9–11: Kontrast 4,0, σ wächst bis 1,5°. */
 export function levelParams(level: number): { contrast: number; sigmaDeg: number } {

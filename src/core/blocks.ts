@@ -2,7 +2,8 @@
 import { fitsOnScreen, type Geometry } from './geometry';
 import type { Rng } from './rng';
 import { checkTrialPlan } from './safety';
-import { PLATEAU_MS, RAMP_MS, REFERENCE_LEVEL } from './stimulus';
+import { RAMP_MS, REFERENCE_LEVEL } from './stimulus';
+import { clampTiming, type TimingSettings } from './timing';
 import type { Side, TrialKind, TrialPlan, VisualPos } from './types';
 
 export const BLOCK_SIZE = 20;
@@ -12,8 +13,6 @@ export const GRID_ECC_STEP_DEG = 5;
 export const GRID_ANGLE_STEP_DEG = 15;
 export const GRID_MARGIN_DEG = 1;
 export const JITTER_DEG = 1;
-export const WAIT_MIN_MS = 1000;
-export const WAIT_MAX_MS = 2500;
 
 export interface GridPoint {
   id: string;
@@ -59,9 +58,12 @@ export interface BasicPlannerOptions {
   geometry: Geometry;
   responseWindowMs: number;
   onlyKind?: TrialKind;
+  /** Tempo (Plateau, Pause); fehlende Felder und Werte außerhalb der Grenzen werden durch `clampTiming` ersetzt bzw. begrenzt. */
+  timing?: Partial<TimingSettings>;
 }
 
 export function createBasicPlanner(rng: Rng, opts: BasicPlannerOptions): { next(): TrialPlan } {
+  const timing = clampTiming(opts.timing ?? {});
   const grids: Record<Side, GridPoint[]> = { L: gridPoints(opts.geometry, 'L'), R: gridPoints(opts.geometry, 'R') };
   let queue: TrialKind[] = [];
   let index = 0;
@@ -92,9 +94,9 @@ export function createBasicPlanner(rng: Rng, opts: BasicPlannerOptions): { next(
         sound: kind === 'catch' ? 'none' : 'sync',
         soaMs: 0,
         soundGainDb: 0,
-        waitMs: rng.uniform(WAIT_MIN_MS, WAIT_MAX_MS),
+        waitMs: rng.uniform(timing.waitMinMs, timing.waitMaxMs),
         rampMs: RAMP_MS,
-        plateauMs: PLATEAU_MS,
+        plateauMs: timing.plateauMs,
         responseWindowMs: opts.responseWindowMs,
         phase: '1',
       };

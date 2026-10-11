@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRng } from '../../src/core/rng';
 import { makeGeometry } from '../../src/core/geometry';
 import { fitsOnScreen } from '../../src/core/geometry';
-import { checkTrialPlan } from '../../src/core/safety';
+import { checkGap, checkTrialPlan, stimulusInterval } from '../../src/core/safety';
 import { guessRate } from '../../src/core/guessRate';
 import { regionOf } from '../../src/core/staircase';
 import { createMap } from '../../src/core/map';
@@ -159,7 +159,7 @@ describe('next()', () => {
     expect(plans.some((x) => x.sound === 'lead' && x.soaMs <= -100 && x.soaMs >= -300)).toBe(true);
   });
 
-  it('führender Ton: Wartezeit zählt bis zum ersten Reiz, also mindestens 1 s bis zum Ton', () => {
+  it('führender Ton: Wartezeit zählt bis zum ersten Reiz, also 1,5–3,5 s bis zum Ton', () => {
     const s = createControllerState(g);
     s.phase.stage = '2';
     const p = planner(s);
@@ -167,8 +167,52 @@ describe('next()', () => {
     const led = plans.filter((x) => x.soaMs < 0);
     expect(led.length).toBeGreaterThan(0);
     for (const x of plans) {
-      expect(x.waitMs + Math.min(0, x.soaMs)).toBeGreaterThanOrEqual(1000);
+      expect(x.waitMs + Math.min(0, x.soaMs)).toBeGreaterThanOrEqual(1500);
+      expect(x.waitMs + Math.min(0, x.soaMs)).toBeLessThanOrEqual(3500);
+    }
+  });
+
+  it('Standard-Plateau 700 ms (Licht 1,0 s sichtbar)', () => {
+    const p = planner();
+    for (let i = 0; i < 100; i++) {
+      const x = p.next();
+      expect(x.plateauMs).toBe(700);
+      expect(x.rampMs).toBe(150);
+    }
+  });
+
+  it('Timing-Optionen: Plateau und Zeit bis zum ersten Reiz (auch mit führendem Ton)', () => {
+    const s = createControllerState(g);
+    s.phase.stage = '2';
+    const timing = { plateauMs: 400, waitMinMs: 2000, waitMaxMs: 2500, responseWindowMinMs: 2000 };
+    const p = createSessionPlanner(s, { rng: createRng(3), geometry: g, sessionId: 's', responseWindowMs: 2000, timing });
+    const plans = Array.from({ length: 300 }, () => p.next());
+    expect(plans.some((x) => x.soaMs < 0)).toBe(true);
+    for (const x of plans) {
+      expect(x.plateauMs).toBe(400);
+      expect(x.waitMs + Math.min(0, x.soaMs)).toBeGreaterThanOrEqual(2000);
       expect(x.waitMs + Math.min(0, x.soaMs)).toBeLessThanOrEqual(2500);
+    }
+  });
+
+  it('kürzestes Tempo (Plateau 300, Pause 1000) hält bei schnellster Taktung 1000 ms Abstand, auch mit führendem Ton', () => {
+    const s = createControllerState(g);
+    s.phase.stage = '2';
+    const timing = { plateauMs: 300, waitMinMs: 1000, waitMaxMs: 1000 };
+    const p = createSessionPlanner(s, { rng: createRng(4), geometry: g, sessionId: 's', responseWindowMs: 1500, timing });
+    const plans = Array.from({ length: 500 }, () => p.next());
+    expect(plans.some((x) => x.soaMs < 0)).toBe(true);
+    let end: number | null = null;
+    let t = 0;
+    for (const x of plans) {
+      expect(checkTrialPlan(x)).toEqual([]);
+      const iv = stimulusInterval(x);
+      const t0 = t + x.waitMs;
+      if (iv) {
+        expect(checkGap(end, t0 + iv.startMs)).toEqual([]);
+        end = t0 + iv.endMs;
+      }
+      t = t0 + 2 * x.rampMs + x.plateauMs;
     }
   });
 });

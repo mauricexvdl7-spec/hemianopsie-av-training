@@ -41,7 +41,9 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
             db: props.db,
             deps,
             geometry: currentGeometry(geometry),
-            responseWindowMs: props.settings.responseWindowMs ?? DEFAULT_WINDOW_MS,
+            // Alte Einstellungen können ein Fenster unter der heutigen Untergrenze enthalten
+            responseWindowMs: Math.max(props.settings.responseWindowMs ?? DEFAULT_WINDOW_MS, props.settings.timing.responseWindowMinMs),
+            timing: props.settings.timing,
             trials: SESSION_TRIALS_M2,
             sessionId: newId(),
             now: () => new Date(),

@@ -55,7 +55,7 @@ export function App() {
         />
       );
     case 'export':
-      return <ExportPage db={db} onImported={() => void reload()} />;
+      return <ExportPage db={db} onImported={() => void reload()} onSettingsChanged={() => void reload()} />;
     case 'test':
       return <TestPage db={db} audio={audio} settings={settings} />;
     case 'start':

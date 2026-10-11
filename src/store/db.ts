@@ -4,6 +4,7 @@ import type { ControllerState } from '../core/controller';
 import type { GeometryInput } from '../core/geometry';
 import type { MapState } from '../core/map';
 import type { SessionSummary, Stage } from '../core/phases';
+import { DEFAULT_TIMING, clampTiming, type TimingSettings } from '../core/timing';
 import type { TrialRecord } from '../core/types';
 import type { AudioSettings } from '../io/audio';
 
@@ -18,6 +19,8 @@ export interface Settings {
   responseWindowMs: number | null;
   /** Fenstergröße (CSS-Pixel) bei der Einrichtung; die Bildbreite in cm gilt nur für genau diese Größe. */
   setupViewport: { width: number; height: number } | null;
+  /** Tempo (Licht, Pause, Zeit zum Tippen); bei alten Einstellungen fehlend (beim Lesen Standard). */
+  timing: TimingSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,6 +30,7 @@ export const DEFAULT_SETTINGS: Settings = {
   referenceRtsMs: [],
   responseWindowMs: null,
   setupViewport: null,
+  timing: DEFAULT_TIMING,
 };
 
 /** Startwerte für die Geometrie im Einrichtungsassistenten. */
@@ -115,7 +119,7 @@ export async function openDb(name: string = DB_NAME): Promise<Db> {
   return {
     async getSettings() {
       const s = (await idb.get('settings', SETTINGS_KEY)) as Settings | undefined;
-      return s ? { ...DEFAULT_SETTINGS, ...s } : structuredClone(DEFAULT_SETTINGS);
+      return s ? { ...DEFAULT_SETTINGS, ...s, timing: clampTiming(s.timing ?? {}) } : structuredClone(DEFAULT_SETTINGS);
     },
     async saveSettings(s) {
       await idb.put('settings', s, SETTINGS_KEY);

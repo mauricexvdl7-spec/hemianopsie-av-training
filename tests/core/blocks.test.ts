@@ -49,15 +49,15 @@ describe('createBasicPlanner', () => {
     return Array.from({ length: 2000 }, () => pl.next());
   })();
 
-  it('2000 Pläne gültig, Anteile exakt, Orte auf dem Bildschirm, Wartezeit 1000–2500', () => {
+  it('2000 Pläne gültig, Anteile exakt, Orte auf dem Bildschirm, Wartezeit 1500–3500 (Standard)', () => {
     expect(ps.filter((p) => p.kind === 'left')).toHaveLength(1400);
     expect(ps.filter((p) => p.kind === 'right')).toHaveLength(400);
     expect(ps.filter((p) => p.kind === 'catch')).toHaveLength(200);
     for (const p of ps) {
       expect(checkTrialPlan(p)).toEqual([]);
       if (p.pos) expect(fitsOnScreen(g, p.pos, 0)).toBe(true);
-      expect(p.waitMs).toBeGreaterThanOrEqual(1000);
-      expect(p.waitMs).toBeLessThanOrEqual(2500);
+      expect(p.waitMs).toBeGreaterThanOrEqual(1500);
+      expect(p.waitMs).toBeLessThanOrEqual(3500);
     }
   });
 
@@ -67,7 +67,7 @@ describe('createBasicPlanner', () => {
       expect(p.soaMs).toBe(0);
       expect(p.soundGainDb).toBe(0);
       expect(p.rampMs).toBe(150);
-      expect(p.plateauMs).toBe(300);
+      expect(p.plateauMs).toBe(700);
       expect(p.responseWindowMs).toBe(2000);
       if (p.kind === 'catch') {
         expect(p.sound).toBe('none');
@@ -112,7 +112,7 @@ describe('createBasicPlanner', () => {
   });
 
   it('Abstand zwischen Reizen ≥ 1000 ms bei schnellster Taktung', () => {
-    // schnellste Taktung: Durchgang endet bei t0 + 600 (sofortige Antwort), nächster t0 = Ende + waitMs
+    // schnellste Taktung: Durchgang endet am Ende des Reizes (sofortige Antwort), nächster t0 = Ende + waitMs
     let end: number | null = null;
     let t = 0;
     for (const p of ps) {
@@ -122,7 +122,31 @@ describe('createBasicPlanner', () => {
         expect(checkGap(end, t0 + iv.startMs)).toEqual([]);
         end = t0 + iv.endMs;
       }
-      t = t0 + 600;
+      t = t0 + 2 * p.rampMs + p.plateauMs;
     }
+  });
+
+  it('Timing-Optionen: Plateau, Wartezeit; kürzestes Tempo hält trotzdem 1000 ms Abstand', () => {
+    const timing = { plateauMs: 300, waitMinMs: 1000, waitMaxMs: 1000, responseWindowMinMs: 1500 };
+    const pl = createBasicPlanner(createRng(7), { sessionId: 's', geometry: g, responseWindowMs: 1500, timing });
+    const plans = Array.from({ length: 200 }, () => pl.next());
+    let end: number | null = null;
+    let t = 0;
+    for (const p of plans) {
+      expect(p.plateauMs).toBe(300);
+      expect(p.waitMs).toBe(1000);
+      const iv = stimulusInterval(p);
+      const t0 = t + p.waitMs;
+      if (iv) {
+        expect(checkGap(end, t0 + iv.startMs)).toEqual([]);
+        end = t0 + iv.endMs;
+      }
+      t = t0 + 2 * p.rampMs + p.plateauMs;
+    }
+  });
+
+  it('Timing-Optionen werden geklemmt (Pause nie unter 1000 ms)', () => {
+    const pl = createBasicPlanner(createRng(8), { sessionId: 's', geometry: g, responseWindowMs: 2000, timing: { waitMinMs: 0, waitMaxMs: 0 } });
+    for (let i = 0; i < 50; i++) expect(pl.next().waitMs).toBe(1000);
   });
 });

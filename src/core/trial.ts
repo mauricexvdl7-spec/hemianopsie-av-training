@@ -1,9 +1,9 @@
 /** Auswertung einer Antwort und Länge des Antwortfensters (Spec 6). */
+import { DEFAULT_TIMING } from './timing';
 import type { Outcome, TrialKind } from './types';
 
 export const MIN_RT_MS = 150;
 export const DEFAULT_WINDOW_MS = 2000;
-export const WINDOW_MIN_MS = 1500;
 export const WINDOW_MAX_MS = 3000;
 
 /** rtMs relativ zu t0 (Beginn der Lichtrampe), null ohne Antwort. */
@@ -22,10 +22,13 @@ function median(xs: readonly number[]): number {
   return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
 }
 
-/** Median + 3·MAD der Referenz-Reaktionszeiten, begrenzt auf 1500–3000 ms; unter 5 Werten 2000 ms. */
-export function responseWindowFromReference(rtsMs: readonly number[]): number {
-  if (rtsMs.length < 5) return DEFAULT_WINDOW_MS;
+/**
+ * Median + 3·MAD der Referenz-Reaktionszeiten, begrenzt auf minMs bis max(3000, minMs) ms
+ * (minMs: einstellbare Untergrenze, Standard 2000 ms); unter 5 Werten max(2000, minMs).
+ */
+export function responseWindowFromReference(rtsMs: readonly number[], minMs: number = DEFAULT_TIMING.responseWindowMinMs): number {
+  if (rtsMs.length < 5) return Math.max(DEFAULT_WINDOW_MS, minMs);
   const med = median(rtsMs);
   const mad = median(rtsMs.map((x) => Math.abs(x - med)));
-  return Math.round(Math.min(WINDOW_MAX_MS, Math.max(WINDOW_MIN_MS, med + 3 * mad)));
+  return Math.round(Math.min(Math.max(WINDOW_MAX_MS, minMs), Math.max(minMs, med + 3 * mad)));
 }

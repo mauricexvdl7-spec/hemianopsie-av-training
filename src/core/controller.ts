@@ -2,8 +2,9 @@
  * Sitzungsplaner: setzt Schwellen-Karte, Ortswahl, Treppe und Phasenlogik zusammen.
  * Der Zustand ist reines JSON (wird später in IndexedDB abgelegt).
  */
-import { PLATEAU_MS, RAMP_MS, REFERENCE_LEVEL } from './stimulus';
-import { WAIT_MAX_MS, WAIT_MIN_MS, gridPoints, jitterPosition, makeBlock, type GridPoint } from './blocks';
+import { RAMP_MS, REFERENCE_LEVEL } from './stimulus';
+import { clampTiming, type TimingSettings } from './timing';
+import { gridPoints, jitterPosition, makeBlock, type GridPoint } from './blocks';
 import type { Geometry } from './geometry';
 import { guessRate, updateGuessRate, type GuessRateState } from './guessRate';
 import { DEFAULT_HALF_LIFE_SESSIONS, createMap, forgetMap, updateMap, type MapState } from './map';
@@ -83,12 +84,15 @@ export interface SessionPlannerOptions {
   geometry: Geometry;
   sessionId: string;
   responseWindowMs: number;
+  /** Tempo (Plateau, Pause); Standard `DEFAULT_TIMING`, Werte werden geklemmt. Eine laufende Sitzung behält ihr Tempo. */
+  timing?: Partial<TimingSettings>;
 }
 
 /** Planer für eine Sitzung; arbeitet auf einer eigenen Kopie des Zustands. */
 export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOptions): SessionPlanner {
   const st = clone(s);
   const { rng, geometry } = opts;
+  const timing = clampTiming(opts.timing ?? {});
   const rightGrid = gridPoints(geometry, 'R');
   let queue: TrialKind[] = [];
   let index = 0;
@@ -132,9 +136,9 @@ export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOpt
         soaMs: snd.soaMs,
         soundGainDb: snd.soundGainDb,
         // Der Ton darf bis zu 300 ms vor dem Licht beginnen; die Wartezeit zählt bis zum ersten Reiz (Ton oder Licht).
-        waitMs: rng.uniform(WAIT_MIN_MS, WAIT_MAX_MS) - Math.min(0, snd.soaMs),
+        waitMs: rng.uniform(timing.waitMinMs, timing.waitMaxMs) - Math.min(0, snd.soaMs),
         rampMs: RAMP_MS,
-        plateauMs: PLATEAU_MS,
+        plateauMs: timing.plateauMs,
         responseWindowMs: opts.responseWindowMs,
         phase: st.phase.stage,
       };

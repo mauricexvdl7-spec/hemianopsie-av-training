@@ -8,6 +8,7 @@ import {
 } from '../core/controller';
 import type { Geometry } from '../core/geometry';
 import type { Rng } from '../core/rng';
+import type { TimingSettings } from '../core/timing';
 import type { TrialPlan, TrialRecord } from '../core/types';
 import type { Db, SessionRecord } from '../store/db';
 import { runTrial, type RunnerDeps } from './runner';
@@ -55,6 +56,8 @@ export interface TrainingSessionArgs {
   deps: RunnerDeps;
   geometry: Geometry;
   responseWindowMs: number;
+  /** Tempo aus den Einstellungen; die Sitzung behält das Tempo, mit dem sie begonnen hat. */
+  timing?: Partial<TimingSettings>;
   /** Gewünschte Zahl gewerteter Durchgänge der ganzen Sitzung (abgebrochene zählen nicht). */
   trials: number;
   sessionId: string;
@@ -107,6 +110,7 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
     geometry,
     sessionId: args.sessionId,
     responseWindowMs: args.responseWindowMs,
+    timing: args.timing,
   });
   const session: SessionRecord = {
     id: args.sessionId,

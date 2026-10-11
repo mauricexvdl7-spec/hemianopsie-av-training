@@ -49,6 +49,7 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
             db={props.db}
             audio={props.audio}
             geometry={settings.geometry ?? DEFAULT_GEOMETRY}
+            timing={settings.timing}
             onNext={(r) => void save({ ...settings, ...r }, null)}
           />
         );

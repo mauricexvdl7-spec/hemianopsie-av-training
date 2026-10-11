@@ -1,9 +1,10 @@
 /** Testseite: einzelne Reize zeigen (Spec 12), gespeicherte Schwellen-Karte ansehen, Simulation ausprobieren. */
 import { useEffect, useState } from 'preact/hooks';
 import type { ControllerState } from '../../core/controller';
-import { LEVEL_COUNT, PLATEAU_MS, RAMP_MS, levelParams } from '../../core/stimulus';
+import { LEVEL_COUNT, RAMP_MS, levelParams } from '../../core/stimulus';
 import type { Side, SoundCondition, TrialRecord } from '../../core/types';
 import { checkTrialPlan } from '../../core/safety';
+import { DEFAULT_WINDOW_MS } from '../../core/trial';
 import type { AudioEngine } from '../../io/audio';
 import type { Db, Settings } from '../../store/db';
 import { currentGeometry } from '../browserDeps';
@@ -51,8 +52,8 @@ export function TestPage(props: { db: Db; audio: AudioEngine; settings: Settings
     soundGainDb: 0,
     waitMs: 1000,
     rampMs: RAMP_MS,
-    plateauMs: PLATEAU_MS,
-    responseWindowMs: 2000,
+    plateauMs: props.settings.timing.plateauMs,
+    responseWindowMs: Math.max(DEFAULT_WINDOW_MS, props.settings.timing.responseWindowMinMs),
     phase: 'test',
   };
   const errors = checkTrialPlan(plan);

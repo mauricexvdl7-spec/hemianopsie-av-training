@@ -2,6 +2,7 @@ import { useState } from 'preact/hooks';
 import { createBasicPlanner } from '../../../core/blocks';
 import type { GeometryInput } from '../../../core/geometry';
 import { createRng } from '../../../core/rng';
+import { DEFAULT_TIMING, clampTiming, type TimingSettings } from '../../../core/timing';
 import { DEFAULT_WINDOW_MS, responseWindowFromReference } from '../../../core/trial';
 import type { AudioEngine } from '../../../io/audio';
 import type { Db } from '../../../store/db';
@@ -17,9 +18,12 @@ export function ReferenceStep(props: {
   db: Db;
   audio: AudioEngine;
   geometry: GeometryInput;
+  /** Tempo aus den Einstellungen: die Referenz misst mit derselben Lichtdauer wie das Training. */
+  timing?: TimingSettings;
   onNext(result: { referenceRtsMs: number[]; responseWindowMs: number }): void;
 }) {
   const [state, setState] = useState<State>({ phase: 'intro' });
+  const timing = clampTiming(props.timing ?? DEFAULT_TIMING);
 
   if (state.phase === 'running') {
     return (
@@ -33,8 +37,9 @@ export function ReferenceStep(props: {
           const base = createBasicPlanner(createRng(Date.now() >>> 0), {
             sessionId,
             geometry: currentGeometry(props.geometry),
-            responseWindowMs: DEFAULT_WINDOW_MS,
+            responseWindowMs: Math.max(DEFAULT_WINDOW_MS, timing.responseWindowMinMs),
             onlyKind: 'right',
+            timing,
           });
           // Referenz misst das Sehen: ohne Ton
           const planner = { next: () => ({ ...base.next(), sound: 'none' as const }) };
@@ -52,7 +57,7 @@ export function ReferenceStep(props: {
             return;
           }
           const rts = recs.filter((r) => r.outcome === 'hit').map((r) => r.rtMs!);
-          setState({ phase: 'done', rts, windowMs: responseWindowFromReference(rts) });
+          setState({ phase: 'done', rts, windowMs: responseWindowFromReference(rts, timing.responseWindowMinMs) });
         }}
       />
     );
@@ -65,7 +70,7 @@ export function ReferenceStep(props: {
         <>
           <p>
             Sag ihm: „Schau auf das Kreuz und tippe, sobald rechts ein Licht erscheint.“ Es folgen {REFERENCE_TRIALS} kurze Durchgänge ohne
-            Ton, etwa eine Minute.
+            Ton, etwa zwei Minuten.
           </p>
           <button class="primary" onClick={() => setState({ phase: 'running' })}>
             Starten

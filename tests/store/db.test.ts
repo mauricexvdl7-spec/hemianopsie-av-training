@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
+import { DEFAULT_TIMING } from '../../src/core/timing';
 import { openDb, DEFAULT_SETTINGS, type MapSnapshot, type SessionRecord } from '../../src/store/db';
 import { makeGeometry } from '../../src/core/geometry';
 import { createControllerState } from '../../src/core/controller';
@@ -92,6 +93,25 @@ describe('Settings.setupViewport', () => {
     const { setupViewport: _omit, ...old } = DEFAULT_SETTINGS;
     await db.saveSettings(old as typeof DEFAULT_SETTINGS);
     expect((await db.getSettings()).setupViewport).toBeNull();
+  });
+});
+
+describe('Settings.timing', () => {
+  it('Standard ist DEFAULT_TIMING, alte Einstellungen ohne Feld bekommen es', async () => {
+    expect(DEFAULT_SETTINGS.timing).toEqual(DEFAULT_TIMING);
+    const db = await openDb(`test-db-${n++}`);
+    const { timing: _omit, ...old } = DEFAULT_SETTINGS;
+    await db.saveSettings(old as typeof DEFAULT_SETTINGS);
+    expect((await db.getSettings()).timing).toEqual(DEFAULT_TIMING);
+  });
+
+  it('gespeichertes Timing bleibt erhalten, unvollständiges wird aufgefüllt', async () => {
+    const db = await openDb(`test-db-${n++}`);
+    const timing = { plateauMs: 900, waitMinMs: 2000, waitMaxMs: 4000, responseWindowMinMs: 3000 };
+    await db.saveSettings({ ...DEFAULT_SETTINGS, timing });
+    expect((await db.getSettings()).timing).toEqual(timing);
+    await db.saveSettings({ ...DEFAULT_SETTINGS, timing: { plateauMs: 900 } as typeof timing });
+    expect((await db.getSettings()).timing).toEqual({ ...DEFAULT_TIMING, plateauMs: 900 });
   });
 });
 
