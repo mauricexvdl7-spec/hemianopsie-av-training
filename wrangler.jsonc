@@ -3,6 +3,8 @@
 {
   "name": "hemianopsie-av-training",
   "compatibility_date": "2026-10-01",
+  // öffentliche Adresse <name>.<konto>.workers.dev eingeschaltet lassen
+  "workers_dev": true,
   "assets": {
     "directory": "./dist"
   }
