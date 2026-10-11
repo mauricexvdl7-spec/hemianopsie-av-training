@@ -87,7 +87,7 @@ export function checkSafety(plans: readonly TrialPlan[]): string[] {
       errors.push(...checkGap(end, t0 + iv.startMs));
       end = t0 + iv.endMs;
     }
-    t = t0 + 600;
+    t = t0 + 2 * p.rampMs + p.plateauMs; // schnellste Taktung: der nächste Durchgang beginnt, sobald der Reiz endet
   }
   return errors;
 }

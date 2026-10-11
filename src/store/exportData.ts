@@ -58,6 +58,12 @@ function parseBundle(x: unknown): Omit<ExportBundle, 'schema' | 'exportedAtIso'>
   return { ...base, controller: controller ?? null, mapSnapshots };
 }
 
+/** Prüft eine gelesene Sicherung (Version 1 oder 2) und liefert die Zahlen für die Vorschau; null bei unbekanntem Format. */
+export function previewBundle(bundle: unknown): { sessions: number; trials: number } | null {
+  const data = parseBundle(bundle);
+  return data ? { sessions: data.sessions.length, trials: data.trials.length } : null;
+}
+
 /** Ersetzt alle vorhandenen Daten durch den Inhalt der Sicherung – atomar: bei einem Fehler bleibt alles beim Alten. */
 export async function importAll(db: Db, bundle: unknown): Promise<{ sessions: number; trials: number }> {
   const data = parseBundle(bundle);

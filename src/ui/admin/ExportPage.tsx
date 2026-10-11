@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { DEFAULT_TIMING, TIMING_LIMITS, clampTiming, type TimingSettings } from '../../core/timing';
 import type { Db } from '../../store/db';
-import { exportAll, importAll, shareOrDownload, trialsToCsv, EXPORT_SCHEMA } from '../../store/exportData';
+import { exportAll, importAll, previewBundle, shareOrDownload, trialsToCsv } from '../../store/exportData';
 import { dayKey } from '../session';
 import { applyTiming, formatSeconds, visibleMs } from './tempo';
 
@@ -132,12 +132,14 @@ export function ExportPage(props: { db: Db; onImported(): void; onSettingsChange
     setMessage(null);
     if (!file) return;
     try {
-      const bundle = JSON.parse(await file.text()) as { schema?: string; sessions?: unknown[]; trials?: unknown[] };
-      if (bundle.schema !== EXPORT_SCHEMA || !Array.isArray(bundle.sessions) || !Array.isArray(bundle.trials)) {
+      const bundle: unknown = JSON.parse(await file.text());
+      // Prüfung und Zahlen kommen aus dem Import selbst, damit Sicherungen aller Versionen (1 und 2) angenommen werden
+      const preview = previewBundle(bundle);
+      if (!preview) {
         setMessage('Unbekanntes Format: Das ist keine Sicherung dieser App.');
         return;
       }
-      setPending({ bundle, sessions: bundle.sessions.length, trials: bundle.trials.length });
+      setPending({ bundle, ...preview });
     } catch {
       setMessage('Die Datei konnte nicht gelesen werden.');
     }

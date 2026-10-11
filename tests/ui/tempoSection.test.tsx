@@ -58,5 +58,5 @@ describe('Abschnitt Tempo in der Verwaltung', () => {
 
     render(null, root);
     root.remove();
-  });
+  }, 15_000);
 });

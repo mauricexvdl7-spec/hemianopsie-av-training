@@ -18,6 +18,7 @@ Updates kommen automatisch, wenn das iPad beim Start Internet hat.
 
 - **Helligkeit:** Einstellungen → Anzeige & Helligkeit: „True Tone“ aus, „Automatisch“ (unter Bedienungshilfen → Anzeige & Textgröße) aus, Helligkeit fest auf einen mittleren Wert. Sonst ändern sich die Reizstärken von Tag zu Tag.
 - **Lautstärke:** etwa auf die Hälfte. Die App begrenzt ihre eigene Lautstärke zusätzlich.
+- **Nach einem Update (Pegel neu abgestimmt):** Die Tonpegel der App wurden neu abgestimmt, bei gleicher Einstellung ist der Ton jetzt etwa 11 dB lauter. Deshalb nach dem Update den Einrichtungsschritt „Ton“ (`#/setup`) wiederholen und eine angenehme Lautstärke einstellen.
 - **Halterung:** das iPad quer in eine stabile Halterung, immer im gleichen Abstand zu den Augen (Standard 30 cm). Den Abstand gibst du bei der Einrichtung ein.
 - **Geführter Zugriff:** Einstellungen → Bedienungshilfen → Geführter Zugriff einschalten. In der App dreimal die Seitentaste drücken, dann kann er die App nicht versehentlich verlassen.
 
