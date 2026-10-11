@@ -6,7 +6,7 @@ import { checkGap, checkTrialPlan, stimulusInterval } from '../../src/core/safet
 import { guessRate } from '../../src/core/guessRate';
 import { pointLevel, regionOf } from '../../src/core/staircase';
 import { createMap, summarizePoint } from '../../src/core/map';
-import { gridPoints } from '../../src/core/blocks';
+import { DEFAULT_GRID, gridPoints } from '../../src/core/blocks';
 import type { SessionSummary } from '../../src/core/phases';
 import type { TrialPlan, TrialRecord } from '../../src/core/types';
 import {
@@ -380,6 +380,76 @@ describe('beginSession', () => {
     expect(state.stairs).toEqual(st.stairs);
     expect(state.phase).toEqual(st.phase);
     expect(state.guess).toEqual(st.guess);
+  });
+});
+
+describe('beginSession mit Raster und offener Sitzung', () => {
+  const grid30 = { ...DEFAULT_GRID, angleStepDeg: 30 };
+
+  it('anderes Raster: neue Karte, alte zurück', () => {
+    const st = createControllerState(g);
+    const { state, replacedMap } = beginSession(st, g, grid30);
+    expect(replacedMap).not.toBeNull();
+    expect(state.gridSignature).toBe(gridSignature(gridPoints(g, 'L', grid30)));
+    expect(state.map).toEqual(createMap(gridPoints(g, 'L', grid30)));
+  });
+
+  it('createControllerState mit Raster nutzt es', () => {
+    const s = createControllerState(g, grid30);
+    expect(s.gridSignature).toBe(gridSignature(gridPoints(g, 'L', grid30)));
+  });
+
+  it('beginSession setzt openSession', () => {
+    expect(beginSession(createControllerState(g), g).state.openSession).toBe(true);
+  });
+
+  it('zweites beginSession auf offener Sitzung vergisst nicht noch einmal', () => {
+    const first = beginSession(createControllerState(g), g).state;
+    const p = planner(first);
+    p.apply(recordOf(nextOf(p, 'left', 'sync'), 'hit'));
+    const mid = p.state();
+    expect(mid.openSession).toBe(true);
+    const { state, replacedMap } = beginSession(mid, g);
+    expect(replacedMap).toBeNull();
+    expect(state.map.logLik).toEqual(mid.map.logLik);
+    expect(state.openSession).toBe(true);
+  });
+
+  it('offene Sitzung mit geändertem Raster: Karte wird trotzdem ersetzt', () => {
+    const mid = beginSession(createControllerState(g), g).state;
+    const { state, replacedMap } = beginSession(mid, g, grid30);
+    expect(replacedMap).not.toBeNull();
+    expect(state.openSession).toBe(true);
+  });
+
+  it('endSession setzt openSession auf false', () => {
+    const open = beginSession(createControllerState(g), g).state;
+    const sum: SessionSummary = { stage: '1', durationMin: 12, meanLeftLevel: 4, leftHitRate: 0.8 };
+    expect(endSession(open, sum, '2026-10-11T10:00:00.000Z').openSession).toBe(false);
+  });
+
+  it('Zustand ohne Feld openSession wird vergessen wie bisher', () => {
+    const p = planner();
+    p.apply(recordOf(nextOf(p, 'left', 'sync'), 'hit'));
+    const st = p.state();
+    expect('openSession' in st).toBe(false);
+    const { state } = beginSession(st, g);
+    const f = 0.5 ** (1 / 7);
+    st.map.logLik.forEach((row, i) => row.forEach((v, t) => expect(state.map.logLik[i]![t]).toBeCloseTo(v * f, 12)));
+  });
+
+  it('Planer mit Raster 30°: rechte Rasterpunkte nur auf Vielfachen von 30°', () => {
+    const state = beginSession(createControllerState(g, grid30), g, grid30).state;
+    const p = createSessionPlanner(state, { rng: createRng(3), geometry: g, sessionId: 's', responseWindowMs: 2000, grid: grid30 });
+    let rights = 0;
+    for (let i = 0; i < 200; i++) {
+      const plan = p.next();
+      if (plan.kind !== 'right') continue;
+      rights++;
+      const angle = Number(/-a(-?\d+)$/.exec(plan.gridPointId!)![1]);
+      expect(Math.abs(angle % 30)).toBe(0);
+    }
+    expect(rights).toBeGreaterThan(0);
   });
 });
 

@@ -4,7 +4,7 @@
  */
 import { RAMP_MS, REFERENCE_LEVEL } from './stimulus';
 import { clampTiming, type TimingSettings } from './timing';
-import { gridPoints, jitterPosition, makeBlock, type GridPoint } from './blocks';
+import { DEFAULT_GRID, gridPoints, jitterPosition, makeBlock, type GridConfig, type GridPoint } from './blocks';
 import type { Geometry } from './geometry';
 import { guessRate, updateGuessRate, type GuessRateState } from './guessRate';
 import { DEFAULT_HALF_LIFE_SESSIONS, createMap, forgetMap, updateMap, type MapState } from './map';
@@ -24,6 +24,8 @@ export interface ControllerState {
   phase: PhaseState;
   halfLifeSessions: number;
   sessionCount: number;
+  /** Eine Sitzung wurde begonnen und noch nicht beendet; fehlt in alten Zuständen (gilt als false). */
+  openSession?: boolean;
 }
 
 /** Tiefe Kopie (der Zustand ist reines JSON). */
@@ -40,8 +42,8 @@ export function gridSignature(points: GridPoint[]): string {
 }
 
 /** Startzustand für die gegebene Geometrie: leere Karte, Treppen auf Stufe 6, Phase 1. */
-export function createControllerState(g: Geometry): ControllerState {
-  const points = gridPoints(g, 'L');
+export function createControllerState(g: Geometry, grid: GridConfig = DEFAULT_GRID): ControllerState {
+  const points = gridPoints(g, 'L', grid);
   return {
     version: 1,
     gridSignature: gridSignature(points),
@@ -54,18 +56,26 @@ export function createControllerState(g: Geometry): ControllerState {
   };
 }
 
-/** Neue Sitzung: Raster prüfen (bei anderer Signatur neue Karte, alte zurückgeben), Vergessen anwenden. */
-export function beginSession(s: ControllerState, g: Geometry): { state: ControllerState; replacedMap: MapState | null } {
+/**
+ * Neue Sitzung: Raster prüfen (bei anderer Signatur neue Karte, alte zurückgeben), Vergessen anwenden.
+ * War die vorige Sitzung noch offen (nicht beendet), wird nicht noch einmal vergessen. Danach gilt die Sitzung als offen.
+ */
+export function beginSession(
+  s: ControllerState,
+  g: Geometry,
+  grid: GridConfig = DEFAULT_GRID,
+): { state: ControllerState; replacedMap: MapState | null } {
   const state = clone(s);
-  const points = gridPoints(g, 'L');
+  const points = gridPoints(g, 'L', grid);
   const signature = gridSignature(points);
+  state.openSession = true;
   if (signature !== state.gridSignature) {
     const replacedMap = state.map;
     state.map = createMap(points);
     state.gridSignature = signature;
     return { state, replacedMap };
   }
-  forgetMap(state.map, state.halfLifeSessions);
+  if (s.openSession !== true) forgetMap(state.map, state.halfLifeSessions);
   return { state, replacedMap: null };
 }
 
@@ -86,6 +96,8 @@ export interface SessionPlannerOptions {
   responseWindowMs: number;
   /** Tempo (Plateau, Pause); Standard `DEFAULT_TIMING`, Werte werden geklemmt. Eine laufende Sitzung behält ihr Tempo. */
   timing?: Partial<TimingSettings>;
+  /** Raster der Reizorte (rechte Seite); Standard `DEFAULT_GRID`. */
+  grid?: GridConfig;
 }
 
 /** Planer für eine Sitzung; arbeitet auf einer eigenen Kopie des Zustands. */
@@ -93,7 +105,7 @@ export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOpt
   const st = clone(s);
   const { rng, geometry } = opts;
   const timing = clampTiming(opts.timing ?? {});
-  const rightGrid = gridPoints(geometry, 'R');
+  const rightGrid = gridPoints(geometry, 'R', opts.grid ?? DEFAULT_GRID);
   let queue: TrialKind[] = [];
   let index = 0;
   let lastLeft: number | null = null;
@@ -191,7 +203,12 @@ export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOpt
   };
 }
 
-/** Sitzungsende: Phasenkriterium auswerten, Sitzungszähler erhöhen. */
+/** Sitzungsende: Phasenkriterium auswerten, Sitzungszähler erhöhen, Sitzung schließen. */
 export function endSession(s: ControllerState, summary: SessionSummary, atIso: string): ControllerState {
-  return { ...clone(s), phase: evaluatePhase(clone(s.phase), summary, atIso), sessionCount: s.sessionCount + 1 };
+  return {
+    ...clone(s),
+    phase: evaluatePhase(clone(s.phase), summary, atIso),
+    sessionCount: s.sessionCount + 1,
+    openSession: false,
+  };
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { makeBlock, createBasicPlanner, gridPoints, BLOCK_SIZE } from '../../src/core/blocks';
+import { makeBlock, createBasicPlanner, gridPoints, clampGrid, DEFAULT_GRID, GRID_LIMITS, BLOCK_SIZE } from '../../src/core/blocks';
+import { gridSignature } from '../../src/core/controller';
 import { createRng } from '../../src/core/rng';
 import { makeGeometry, fitsOnScreen } from '../../src/core/geometry';
 import { checkTrialPlan, checkGap, stimulusInterval } from '../../src/core/safety';
@@ -40,6 +41,43 @@ describe('gridPoints', () => {
   });
   it('rechts kleiner als links (Kreuz nach rechts versetzt)', () => {
     expect(gridPoints(g, 'R').length).toBeLessThan(gridPoints(g, 'L').length);
+  });
+});
+
+describe('einstellbares Raster', () => {
+  it('ohne Angabe oder mit DEFAULT_GRID unverändert', () => {
+    expect(DEFAULT_GRID).toEqual({ eccStartDeg: 3, eccStepDeg: 5, angleStepDeg: 15 });
+    expect(gridSignature(gridPoints(g, 'L'))).toBe(gridSignature(gridPoints(g, 'L', DEFAULT_GRID)));
+    expect(gridSignature(gridPoints(g, 'R'))).toBe(gridSignature(gridPoints(g, 'R', DEFAULT_GRID)));
+  });
+  it('30°-Raster mit Start 2 und Schritt 4: Winkel Vielfache von 30, Exzentrizitäten 2, 6, 10, …', () => {
+    const pts = gridPoints(g, 'L', { eccStartDeg: 2, eccStepDeg: 4, angleStepDeg: 30 });
+    expect(pts.length).toBeGreaterThan(5);
+    for (const p of pts) {
+      expect(Math.abs(p.pos.angleDeg % 30)).toBe(0);
+      expect(p.pos.angleDeg).toBeGreaterThanOrEqual(-90);
+      expect(p.pos.angleDeg).toBeLessThanOrEqual(90);
+      expect((p.pos.eccDeg - 2) % 4).toBe(0);
+      expect(p.id).toBe(`L-e${p.pos.eccDeg}-a${p.pos.angleDeg}`);
+    }
+    expect(pts.some((p) => p.pos.eccDeg === 2)).toBe(true);
+    expect(pts.some((p) => p.pos.eccDeg === 6)).toBe(true);
+  });
+  it('clampGrid: runden, begrenzen, Winkel auf erlaubten Wert', () => {
+    expect(clampGrid({ eccStartDeg: 1, eccStepDeg: 9.4, angleStepDeg: 17 })).toEqual({ eccStartDeg: 2, eccStepDeg: 8, angleStepDeg: 15 });
+    expect(clampGrid({ eccStartDeg: 9, eccStepDeg: 1, angleStepDeg: 100 })).toEqual({ eccStartDeg: 6, eccStepDeg: 3, angleStepDeg: 30 });
+    expect(clampGrid({ eccStartDeg: 3.6 })).toEqual({ ...DEFAULT_GRID, eccStartDeg: 4 });
+  });
+  it('clampGrid: Gleichstand beim Winkel wählt den kleineren Wert', () => {
+    expect(clampGrid({ angleStepDeg: 12.5 }).angleStepDeg).toBe(10);
+    expect(clampGrid({ angleStepDeg: 25 }).angleStepDeg).toBe(20);
+    expect(clampGrid({ angleStepDeg: 17.5 }).angleStepDeg).toBe(15);
+  });
+  it('clampGrid: fehlend oder ungültig -> Standard', () => {
+    expect(clampGrid(undefined)).toEqual(DEFAULT_GRID);
+    expect(clampGrid({})).toEqual(DEFAULT_GRID);
+    expect(clampGrid({ eccStartDeg: NaN, angleStepDeg: NaN })).toEqual(DEFAULT_GRID);
+    expect(GRID_LIMITS.angleStepDeg).toEqual([10, 15, 20, 30]);
   });
 });
 
