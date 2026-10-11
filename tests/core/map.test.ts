@@ -65,15 +65,15 @@ describe('Schwellen-Karte', () => {
     expect(summarizePoint(miss, i, 6, 0.05).thetaMean).toBeGreaterThan(base);
   });
 
-  it('Nachbar in 5° bekommt schwächere Änderung als der Punkt selbst; Punkt in 12° unverändert', () => {
+  it('Nachbar in 0,8° bekommt schwächere Änderung als der Punkt selbst; Punkte in 5° und 10° unverändert', () => {
     const own = indexOf(3, 0);
-    const near = indexOf(8, 0);
-    // Das Raster hat Abstand 5° (e3, e8, e13, e18); e13 liegt mit 10° schon unter der Schwelle w < 0,05, e18 mit 15° klar darunter.
-    const far = indexOf(13, 0);
-    const farther = indexOf(18, 0);
-    expect(angularDistanceDeg(posOf(own), posOf(near))).toBeCloseTo(5, 1);
-    expect(angularDistanceDeg(posOf(own), posOf(far))).toBeGreaterThan(9.9);
-    expect(angularDistanceDeg(posOf(own), posOf(farther))).toBeGreaterThan(12);
+    // σ = 1°: der Nachbar auf dem Ring e3 (15° Winkelabstand ≈ 0,78°) zählt mit w ≈ 0,74; der Ring e8 (5°) liegt mit w ≈ 4e-6 unter 0,05.
+    const near = indexOf(3, 15);
+    const far = indexOf(8, 0);
+    const farther = indexOf(13, 0);
+    expect(angularDistanceDeg(posOf(own), posOf(near))).toBeCloseTo(0.78, 1);
+    expect(angularDistanceDeg(posOf(own), posOf(far))).toBeCloseTo(5, 1);
+    expect(angularDistanceDeg(posOf(own), posOf(farther))).toBeGreaterThan(9.9);
 
     const m = createMap(points);
     const base = summarizePoint(m, own, 6, 0.05).thetaMean;

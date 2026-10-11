@@ -4,8 +4,8 @@ import { makeGeometry } from '../../src/core/geometry';
 import { fitsOnScreen } from '../../src/core/geometry';
 import { checkGap, checkTrialPlan, stimulusInterval } from '../../src/core/safety';
 import { guessRate } from '../../src/core/guessRate';
-import { regionOf } from '../../src/core/staircase';
-import { createMap } from '../../src/core/map';
+import { pointLevel, regionOf } from '../../src/core/staircase';
+import { createMap, summarizePoint } from '../../src/core/map';
 import { gridPoints } from '../../src/core/blocks';
 import type { SessionSummary } from '../../src/core/phases';
 import type { TrialPlan, TrialRecord } from '../../src/core/types';
@@ -102,12 +102,13 @@ describe('next()', () => {
     expect(seen).toBeGreaterThan(0);
   });
 
-  it('linke Pläne tragen die Treppenstufe ihrer Region', () => {
+  it('linke Pläne tragen die Treppenstufe ihrer Region, begrenzt auf round(θ̂) ± 1', () => {
     const s = createControllerState(g);
     s.stairs.upper.level = 3;
     s.stairs.lower.level = 8; // Mitte bleibt bei 6
     const p = planner(s);
-    const expected = { upper: 3, middle: 6, lower: 8 } as const;
+    // leere Karte: θ̂ = 6,5 → Band 6..8; oben 3 wird auf 6 angehoben, unten 8 und Mitte 6 bleiben
+    const expected = { upper: 6, middle: 6, lower: 8 } as const;
     const seen = { upper: 0, middle: 0, lower: 0 };
     for (let i = 0; i < 400; i++) {
       const plan = p.next();
@@ -122,21 +123,28 @@ describe('next()', () => {
     expect(seen.lower).toBeGreaterThan(0);
   });
 
-  it('nach zwei Treffern in einer Region trägt der nächste Plan dieser Region die gesenkte Stufe', () => {
+  it('nach zwei Treffern in einer Region trägt der nächste Plan dieser Region die gesenkte Stufe (im Band um θ̂)', () => {
     const p = planner();
     const first = nextOf(p, 'left', 'sync');
     const region = regionOf(p.state().map.points.find((q) => q.id === first.gridPointId)!.pos.angleDeg);
     p.apply(recordOf(first, 'hit'));
     p.apply(recordOf(first, 'hit'));
+    const st = p.state();
+    expect(st.stairs[region].level).toBe(4);
     let checked = 0;
+    let lowered = 0;
     for (let i = 0; i < 400; i++) {
       const plan = p.next();
       if (plan.kind !== 'left') continue;
-      const r = regionOf(p.state().map.points.find((q) => q.id === plan.gridPointId)!.pos.angleDeg);
-      expect(plan.level).toBe(r === region ? 4 : 6);
+      const j = st.map.points.findIndex((q) => q.id === plan.gridPointId);
+      const r = regionOf(st.map.points[j]!.pos.angleDeg);
+      const theta = summarizePoint(st.map, j, 6, guessRate(st.guess)).thetaMean;
+      expect(plan.level).toBe(pointLevel(r === region ? 4 : 6, theta));
+      if (r === region && plan.level! < 6) lowered++;
       checked++;
     }
     expect(checked).toBeGreaterThan(0);
+    expect(lowered).toBeGreaterThan(0); // nahe dem Treffer senkt die Karte θ̂, dort kommt die gesenkte Stufe an
   });
 
   it('kein linker Punkt zweimal direkt hintereinander (nach Raster-ID)', () => {
@@ -311,16 +319,17 @@ describe('apply()', () => {
 });
 
 describe('summary()', () => {
-  it('Mittel von stairBefore und Trefferquote ohne wrongSide', () => {
+  it('Mittel der dargebotenen linken Stufen und Trefferquote ohne wrongSide', () => {
     const p = planner();
     const plan = nextOf(p, 'left', 'sync');
-    p.apply(recordOf(plan, 'hit')); // before 6
-    p.apply(recordOf(plan, 'hit')); // before 6 -> 4
-    p.apply(recordOf(plan, 'miss')); // before 4 -> 6
+    // dargebotene Stufen 9, 9, 3 (Treppenstufe der Region davor wäre 6, 6, 4)
+    p.apply(recordOf(plan, 'hit', { level: 9 }));
+    p.apply(recordOf(plan, 'hit', { level: 9 }));
+    p.apply(recordOf(plan, 'miss', { level: 3 }));
     const s = p.summary(12);
     expect(s.stage).toBe('1');
     expect(s.durationMin).toBe(12);
-    expect(s.meanLeftLevel).toBeCloseTo((6 + 6 + 4) / 3, 10);
+    expect(s.meanLeftLevel).toBeCloseTo((9 + 9 + 3) / 3, 10);
     expect(s.leftHitRate).toBeCloseTo(2 / 3, 10);
   });
 

@@ -9,8 +9,10 @@ import {
   endSession,
   type ControllerState,
 } from './controller';
+import { guessRate } from './guessRate';
+import { summarizePoint } from './map';
 import type { Rng } from './rng';
-import { levelParams } from './stimulus';
+import { REFERENCE_LEVEL, levelParams } from './stimulus';
 import { DEFAULT_WINDOW_MS, classifyResponse } from './trial';
 import type { SoundCondition, TrialPlan, TrialRecord, VisualPos } from './types';
 
@@ -135,4 +137,24 @@ export function runSimulatedSession(
   }
   const next = endSession(planner.state(), planner.summary((trials * 4.5) / 60), atIso);
   return { state: next, records };
+}
+
+/** Der Schwellenfehler zählt nur an Orten, die mit irgendeiner Stufe sichtbar sind (wahre Schwelle ≤ 11). */
+export const RMSE_MAX_TRUE_THETA = 11;
+
+/**
+ * RMSE zwischen geschätzter Schwelle (θ̂-Mittel der Karte) und wahrer Schwelle an der nominalen Rasterposition
+ * (ohne Ton, mit dem Lernstand der Sitzung `sessionIndex`) über alle Punkte mit wahrer Schwelle ≤ 11.
+ */
+export function thresholdRmse(state: ControllerState, sessionIndex: number, opts: SimOptions): { rmse: number | null; points: number } {
+  const gamma = guessRate(state.guess);
+  let sum = 0;
+  let n = 0;
+  state.map.points.forEach((pt, i) => {
+    const truth = trueThreshold(pt.pos, sessionIndex, opts);
+    if (truth > RMSE_MAX_TRUE_THETA) return;
+    sum += (summarizePoint(state.map, i, REFERENCE_LEVEL, gamma).thetaMean - truth) ** 2;
+    n++;
+  });
+  return { rmse: n > 0 ? Math.sqrt(sum / n) : null, points: n };
 }

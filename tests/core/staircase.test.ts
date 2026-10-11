@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { psychometric } from '../../src/core/map';
 import { createRng } from '../../src/core/rng';
 import { REFERENCE_LEVEL } from '../../src/core/stimulus';
-import { createStairs, regionOf, REGIONS, updateStair, type StairState } from '../../src/core/staircase';
+import { createStairs, pointLevel, regionOf, REGIONS, updateStair, type StairState } from '../../src/core/staircase';
 
 function apply(s: StairState, hits: boolean[]): StairState {
   return hits.reduce((acc, h) => updateStair(acc, h), s);
@@ -108,5 +108,22 @@ describe('Konvergenz', () => {
     const rate = hitRate(8, 12);
     expect(rate).toBeGreaterThanOrEqual(0.65);
     expect(rate).toBeLessThanOrEqual(0.76);
+  });
+});
+
+describe('pointLevel', () => {
+  it('lässt die Regionsstufe im Band round(θ̂) ± 1 unverändert', () => {
+    expect(pointLevel(6, 6.2)).toBe(6);
+    expect(pointLevel(5, 6.2)).toBe(5);
+    expect(pointLevel(7, 6.2)).toBe(7);
+  });
+  it('begrenzt auf das Band um die Kartenschwelle', () => {
+    expect(pointLevel(11, 5.4)).toBe(6);
+    expect(pointLevel(0, 9.6)).toBe(9);
+  });
+  it('bleibt in 0..11', () => {
+    expect(pointLevel(11, 13.6)).toBe(11);
+    expect(pointLevel(0, -1)).toBe(0);
+    expect(pointLevel(6, 14)).toBe(11);
   });
 });

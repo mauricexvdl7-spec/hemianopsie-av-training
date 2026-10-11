@@ -11,7 +11,7 @@ import { DEFAULT_HALF_LIFE_SESSIONS, createMap, forgetMap, updateMap, type MapSt
 import { assignSound, createPhaseState, evaluatePhase, type PhaseState, type SessionSummary } from './phases';
 import type { Rng } from './rng';
 import { checkTrialPlan } from './safety';
-import { choosePoint } from './selector';
+import { choosePoint, presentedLevel } from './selector';
 import { REGIONS, createStairs, regionOf, updateStair, type StairSet } from './staircase';
 import type { TrialKind, TrialPlan, TrialRecord, VisualPos } from './types';
 
@@ -113,7 +113,7 @@ export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOpt
         const i = choosePoint(st.map, st.stairs, guessRate(st.guess), rng, lastLeft);
         const gp = st.map.points[i]!;
         lastLeft = i;
-        level = st.stairs[regionOf(gp.pos.angleDeg)].level;
+        level = presentedLevel(st.map, st.stairs, i, guessRate(st.guess));
         pos = jitterPosition(rng, geometry, gp.pos);
         gridPointId = gp.id;
       } else if (kind === 'right') {
@@ -168,7 +168,7 @@ export function createSessionPlanner(s: ControllerState, opts: SessionPlannerOpt
       const before = st.stairs[region];
       const after = updateStair(before, hit);
       st.stairs[region] = after;
-      levelSum += before.level;
+      levelSum += r.level; // dargebotene Stufe = benötigte Reizstärke (Spec 9)
       stairTrials++;
       if (hit) hits++;
       return { ...r, stairBefore: before.level, stairAfter: after.level };

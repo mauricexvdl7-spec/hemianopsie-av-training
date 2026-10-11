@@ -53,9 +53,10 @@ describe('selectionScores', () => {
     }
   });
 
-  it('nutzt die Stufe der Region des Punkts', () => {
+  it('nutzt die Stufe der Region des Punkts, begrenzt auf round(θ̂) ± 1', () => {
     const st = createStairs();
-    st.upper = { ...st.upper, level: 2 };
+    // leere Karte: θ̂ = 6,5 → Band 6..8; Stufe 7 liegt im Band, Stufe 2 würde auf 6 angehoben
+    st.upper = { ...st.upper, level: 7 };
     const m = createMap(points);
     const scores = selectionScores(m, st, GAMMA);
     const iUpper = points.findIndex((p) => regionOf(p.pos.angleDeg) === 'upper');
@@ -64,7 +65,9 @@ describe('selectionScores', () => {
       const s = summarizePoint(m, i, level, GAMMA);
       return s.pSd * Math.exp(-(((s.p - 0.625) / 0.15) ** 2));
     };
-    expect(scores[iUpper]).toBeCloseTo(expected(iUpper, 2), 12);
+    expect(scores[iUpper]).toBeCloseTo(expected(iUpper, 7), 12);
+    st.upper = { ...st.upper, level: 2 };
+    expect(selectionScores(m, st, GAMMA)[iUpper]).toBeCloseTo(expected(iUpper, 6), 12);
     expect(scores[iMiddle]).toBeCloseTo(expected(iMiddle, 6), 12);
   });
 });

@@ -11,6 +11,16 @@ export function regionOf(angleDeg: number): Region {
   return 'middle';
 }
 
+/** Band um die Kartenschwelle: die dargebotene Stufe liegt in round(θ̂) ± POINT_LEVEL_BAND. */
+export const POINT_LEVEL_BAND = 1;
+
+/** Dargebotene Stufe an einem Punkt: Regionsstufe, begrenzt auf round(θ̂) ± 1 und auf 0..11. */
+export function pointLevel(regionLevel: number, thetaHat: number): number {
+  const c = Math.round(thetaHat);
+  const banded = Math.min(c + POINT_LEVEL_BAND, Math.max(c - POINT_LEVEL_BAND, regionLevel));
+  return Math.min(LEVEL_COUNT - 1, Math.max(0, banded));
+}
+
 export interface StairState {
   level: number;
   hitStreak: number;

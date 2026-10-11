@@ -11,7 +11,8 @@ export const THETA_GRID: readonly number[] = Array.from({ length: 31 }, (_, k) =
 
 export const PSY_SLOPE = 1;
 export const PSY_LAPSE = 0.04;
-export const KERNEL_SIGMA_DEG = 4;
+/** Glättungsbreite: 1° (Raster 5°); breitere Kerne verwischen die scharfe Hemianopsie-Grenze. */
+export const KERNEL_SIGMA_DEG = 1;
 export const KERNEL_CUTOFF = 0.05;
 export const DEFAULT_HALF_LIFE_SESSIONS = 7;
 

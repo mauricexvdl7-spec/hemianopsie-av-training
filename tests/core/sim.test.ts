@@ -8,8 +8,11 @@ import {
   isBorderZone,
   runSimulatedSession,
   simulateResponse,
+  thresholdRmse,
   trueThreshold,
 } from '../../src/core/sim';
+import { summarizePoint } from '../../src/core/map';
+import { guessRate } from '../../src/core/guessRate';
 import type { VisualPos } from '../../src/core/types';
 
 const g = makeGeometry({ screenWidthCm: 24, viewingDistanceCm: 30, fixationXFraction: 2 / 3, fixationYFraction: 0.5 }, 1180, 820);
@@ -141,5 +144,29 @@ describe('runSimulatedSession', () => {
     const b = runSimulatedSession(createControllerState(g), g, 1, 60, createRng(9), on);
     expect(a.records).toEqual(b.records);
     expect(a.state).toEqual(b.state);
+  });
+});
+
+describe('thresholdRmse', () => {
+  it('rechnet über Rasterpunkte mit wahrer Schwelle ≤ 11, gegen die nominale Position und das Lernen der Sitzung', () => {
+    const { state } = runSimulatedSession(createControllerState(g), g, 1, 120, createRng(4), on);
+    const res = thresholdRmse(state, 7, on);
+    let sum = 0;
+    let n = 0;
+    state.map.points.forEach((pt, i) => {
+      const truth = trueThreshold(pt.pos, 7, on);
+      if (truth > 11) return;
+      sum += (summarizePoint(state.map, i, 6, guessRate(state.guess)).thetaMean - truth) ** 2;
+      n++;
+    });
+    expect(n).toBeGreaterThan(10);
+    expect(res.points).toBe(n);
+    expect(res.rmse).toBeCloseTo(Math.sqrt(sum / n), 12);
+  });
+  it('leere Karte: Schätzung 6,5 überall, endlicher Fehler', () => {
+    const res = thresholdRmse(createControllerState(g), 0, off);
+    expect(res.points).toBeGreaterThan(10);
+    expect(Number.isFinite(res.rmse!)).toBe(true);
+    expect(res.rmse!).toBeGreaterThan(1);
   });
 });
