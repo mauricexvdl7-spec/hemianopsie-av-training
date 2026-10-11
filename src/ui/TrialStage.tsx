@@ -22,12 +22,14 @@ export function TrialStage(props: { geometry: GeometryInput; audio: AudioEngine;
   if (error) {
     return (
       <div class="patient screen overlay-message">
-        <div>
-          Es ist ein Fehler aufgetreten.
-          <br />
-          Bitte die App schließen und neu öffnen.
-          <div class="hint" style={{ fontSize: '20px', marginTop: '24px' }}>
-            {error}
+        <div class="patient-right">
+          <div class="message-card card">
+            <p class="message-text">
+              Es ist ein Fehler aufgetreten.
+              <br />
+              Bitte die App schließen und neu öffnen.
+            </p>
+            <p class="message-detail">{error}</p>
           </div>
         </div>
       </div>

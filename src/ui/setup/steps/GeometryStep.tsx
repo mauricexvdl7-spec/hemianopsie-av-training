@@ -18,7 +18,7 @@ export function GeometryStep(props: { initial: GeometryInput; onNext(g: Geometry
   const problems = g ? geometryProblems(g) : [];
 
   return (
-    <div>
+    <section class="card">
       <h1>Bildschirm und Abstand</h1>
       <label>
         Sichtbare Bildbreite in cm (mit dem Lineal quer über die leuchtende Fläche messen)
@@ -54,9 +54,11 @@ export function GeometryStep(props: { initial: GeometryInput; onNext(g: Geometry
       {problems.map((p) => (
         <p class="error">{p}</p>
       ))}
-      <button class="primary" disabled={!geometry || problems.length > 0} onClick={() => geometry && props.onNext(geometry)}>
-        Weiter
-      </button>
-    </div>
+      <div class="actions">
+        <button class="primary" disabled={!geometry || problems.length > 0} onClick={() => geometry && props.onNext(geometry)}>
+          Weiter
+        </button>
+      </div>
+    </section>
   );
 }

@@ -9,6 +9,24 @@ import { ReferenceStep } from './steps/ReferenceStep';
 
 type Step = 'disclaimer' | 'geometry' | 'audio' | 'reference';
 
+const STEPS: readonly Step[] = ['disclaimer', 'geometry', 'audio', 'reference'];
+
+/** Schritt-Anzeige: „Schritt 2 von 4“ und Punkte (erledigt, aktuell, offen). */
+export function Stepper(props: { index: number; count: number }) {
+  return (
+    <div class="stepper">
+      <span>
+        Schritt {props.index + 1} von {props.count}
+      </span>
+      <span class="stepper-dots" aria-hidden="true">
+        {Array.from({ length: props.count }, (_, i) => (
+          <span key={i} class={i < props.index ? 'done' : i === props.index ? 'current' : ''} />
+        ))}
+      </span>
+    </div>
+  );
+}
+
 export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [step, setStep] = useState<Step>('disclaimer');
@@ -17,7 +35,14 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
     void props.db.getSettings().then(setSettings);
   }, [props.db]);
 
-  if (!settings) return <div class="admin screen">Lade …</div>;
+  if (!settings)
+    return (
+      <div class="admin screen">
+        <div class="admin-inner">
+          <p class="hint">Lade …</p>
+        </div>
+      </div>
+    );
 
   const save = async (next: Settings, nextStep: Step | null) => {
     await props.db.saveSettings(next);
@@ -56,5 +81,12 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
     }
   })();
 
-  return <div class="admin screen">{body}</div>;
+  return (
+    <div class="admin screen">
+      <div class="admin-inner">
+        <Stepper index={STEPS.indexOf(step)} count={STEPS.length} />
+        {body}
+      </div>
+    </div>
+  );
 }

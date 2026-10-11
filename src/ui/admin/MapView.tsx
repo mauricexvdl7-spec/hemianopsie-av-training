@@ -6,6 +6,7 @@ import { summarizePoint, type MapState } from '../../core/map';
 import { REFERENCE_LEVEL } from '../../core/stimulus';
 import type { VisualPos } from '../../core/types';
 import { heatColor, thresholdColor } from '../mapColors';
+import { token } from '../theme';
 
 export type MapMode = 'prob' | 'theta';
 
@@ -37,7 +38,7 @@ const RAD = Math.PI / 180;
 /** Umschalter zwischen den beiden Darstellungen. */
 export function MapModeToggle(props: { mode: MapMode; onChange(m: MapMode): void }) {
   return (
-    <div role="group" aria-label="Darstellung der Karte">
+    <div class="segmented" role="group" aria-label="Darstellung der Karte">
       <button class={props.mode === 'prob' ? 'primary' : ''} aria-pressed={props.mode === 'prob'} onClick={() => props.onChange('prob')}>
         Trefferwahrscheinlichkeit (Stufe {REFERENCE_LEVEL})
       </button>
@@ -71,14 +72,14 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
   const gid = `grad-${mode}-${props.title.replace(/[^A-Za-z0-9]/g, '')}`;
 
   return (
-    <figure style={{ margin: '0 0 16px', display: 'inline-block', verticalAlign: 'top' }}>
-      <figcaption style={{ fontSize: '22px', marginBottom: '6px' }}>{props.title}</figcaption>
+    <figure style={{ display: 'inline-block', verticalAlign: 'top' }}>
+      <figcaption>{props.title}</figcaption>
       <svg
         viewBox={`0 0 ${WIDTH} ${height + 68}`}
         width={WIDTH}
         role="img"
         aria-label={`${props.title}: Schwellen-Karte des linken Gesichtsfelds`}
-        style={{ maxWidth: '100%', height: 'auto', background: '#2e2e2e', borderRadius: '10px' }}
+        style={{ maxWidth: '100%', height: 'auto', background: token('--bg'), borderRadius: '10px', border: `1px solid ${token('--border')}` }}
       >
         <defs>
           <linearGradient id={gid} x1="0" x2="1" y1="0" y2="0">
@@ -111,34 +112,34 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
             key={e}
             x={fx - Math.tan(e * RAD) * scale}
             y={fy + 5}
-            fill="#e0e0e0"
+            fill={token('--text')}
             font-size="16"
             text-anchor="middle"
-            stroke="#2e2e2e"
+            stroke={token('--bg')}
             stroke-width={4}
             paint-order="stroke"
           >
             {e}°
           </text>
         ))}
-        <g stroke="#e0e0e0" stroke-width={2}>
+        <g stroke={token('--text')} stroke-width={2}>
           <line x1={fx - 9} x2={fx + 9} y1={fy} y2={fy} />
           <line x1={fx} x2={fx} y1={fy - 9} y2={fy + 9} />
         </g>
-        <text x={MARGIN / 2} y={18} fill="#b8b8b8" font-size="16">
+        <text x={MARGIN / 2} y={18} fill={token('--muted')} font-size="16">
           oben
         </text>
-        <text x={MARGIN / 2} y={height - 14} fill="#b8b8b8" font-size="16">
+        <text x={MARGIN / 2} y={height - 14} fill={token('--muted')} font-size="16">
           unten
         </text>
-        <text x={WIDTH / 2} y={height + 12} fill="#b8b8b8" font-size="16" text-anchor="middle">
+        <text x={WIDTH / 2} y={height + 12} fill={token('--muted')} font-size="16" text-anchor="middle">
           Abstand vom Fixationskreuz (Sehwinkel), linkes Halbfeld
         </text>
         <rect x={MARGIN} y={height + 24} width={WIDTH - 2 * MARGIN} height={14} fill={`url(#${gid})`} stroke="#777" />
-        <text x={MARGIN} y={height + 58} fill="#e0e0e0" font-size="16">
+        <text x={MARGIN} y={height + 58} fill={token('--text')} font-size="16">
           {mode === 'prob' ? '0 % (nicht gesehen)' : 'Schwelle 14 (nicht sichtbar)'}
         </text>
-        <text x={WIDTH - MARGIN} y={height + 58} fill="#e0e0e0" font-size="16" text-anchor="end">
+        <text x={WIDTH - MARGIN} y={height + 58} fill={token('--text')} font-size="16" text-anchor="end">
           {mode === 'prob' ? '100 % (sicher gesehen)' : 'Schwelle 0 (gut sichtbar)'}
         </text>
       </svg>

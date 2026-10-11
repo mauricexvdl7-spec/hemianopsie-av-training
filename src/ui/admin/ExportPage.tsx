@@ -62,8 +62,8 @@ function TempoSection(props: { db: Db; onChanged(): void }) {
   const [wMaxLo, wMaxHi] = TIMING_LIMITS.waitMaxMs;
   const [rwLo, rwHi] = TIMING_LIMITS.responseWindowMinMs;
   return (
-    <>
-      <h1 style={{ marginTop: '32px' }}>Tempo</h1>
+    <section class="card">
+      <h1>Tempo</h1>
       <SecondsSlider
         label="Licht sichtbar"
         ms={visibleMs(timing.plateauMs)}
@@ -99,12 +99,14 @@ function TempoSection(props: { db: Db; onChanged(): void }) {
       <p class="hint">
         Die Pause ist nie kürzer als 1 Sekunde. Änderungen gelten ab der nächsten Sitzung, eine laufende Sitzung behält ihr Tempo.
       </p>
-      <button class="primary" onClick={() => void save(timing)}>
-        Tempo speichern
-      </button>
-      <button onClick={() => set(() => DEFAULT_TIMING)}>Standard wiederherstellen</button>
+      <div class="actions">
+        <button class="primary" onClick={() => void save(timing)}>
+          Tempo speichern
+        </button>
+        <button onClick={() => set(() => DEFAULT_TIMING)}>Standard wiederherstellen</button>
+      </div>
       {note && <p>{note}</p>}
-    </>
+    </section>
   );
 }
 
@@ -155,45 +157,59 @@ export function ExportPage(props: { db: Db; onImported(): void; onSettingsChange
 
   return (
     <div class="admin screen">
-      <h1>Daten sichern</h1>
-      <p class="hint">
-        Alle Daten liegen nur auf diesem iPad. Wird die App gelöscht, sind sie weg. Deshalb regelmäßig sichern, zum Beispiel per AirDrop
-        oder Mail an dich. Sicherungen nie in das öffentliche Repository legen.
-      </p>
-      <button class="primary" onClick={() => void prepareJson()}>
-        Alles sichern (JSON)
-      </button>
-      <button onClick={() => void prepareCsv()}>Durchgänge als Tabelle (CSV)</button>
-      {ready && (
-        <p>
-          Bereit: {ready.name}
-          <br />
-          <button class="primary" onClick={() => void shareOrDownload(ready)}>
-            Teilen oder speichern
-          </button>
-        </p>
-      )}
+      <div class="admin-inner">
+        <section class="card">
+          <h1>Daten sichern</h1>
+          <p class="hint">
+            Alle Daten liegen nur auf diesem iPad. Wird die App gelöscht, sind sie weg. Deshalb regelmäßig sichern, zum Beispiel per AirDrop
+            oder Mail an dich. Sicherungen nie in das öffentliche Repository legen.
+          </p>
+          <div class="actions">
+            <button class="primary" onClick={() => void prepareJson()}>
+              Alles sichern (JSON)
+            </button>
+            <button onClick={() => void prepareCsv()}>Durchgänge als Tabelle (CSV)</button>
+          </div>
+          {ready && (
+            <div class="result-line">
+              Bereit: {ready.name}
+              <div class="actions">
+                <button class="primary" onClick={() => void shareOrDownload(ready)}>
+                  Teilen oder speichern
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
 
-      <h1 style={{ marginTop: '32px' }}>Sicherung einspielen</h1>
-      <input type="file" accept="application/json,.json" onChange={(e) => void pickFile(e.currentTarget.files?.[0])} />
-      {pending && (
-        <p>
-          {pending.sessions} Sitzungen, {pending.trials} Durchgänge – vorhandene Daten werden ersetzt.
-          <br />
-          <button class="primary" onClick={() => void confirmImport()}>
-            Ersetzen
-          </button>
-          <button onClick={() => setPending(null)}>Abbrechen</button>
-        </p>
-      )}
-      {message && <p>{message}</p>}
+        <section class="card">
+          <h1>Sicherung einspielen</h1>
+          <input type="file" accept="application/json,.json" onChange={(e) => void pickFile(e.currentTarget.files?.[0])} />
+          {pending && (
+            <div class="result-line">
+              {pending.sessions} Sitzungen, {pending.trials} Durchgänge – vorhandene Daten werden ersetzt.
+              <div class="actions">
+                <button class="primary" onClick={() => void confirmImport()}>
+                  Ersetzen
+                </button>
+                <button onClick={() => setPending(null)}>Abbrechen</button>
+              </div>
+            </div>
+          )}
+          {message && <p>{message}</p>}
+        </section>
 
-      <TempoSection db={props.db} onChanged={() => props.onSettingsChanged?.()} />
+        <TempoSection db={props.db} onChanged={() => props.onSettingsChanged?.()} />
 
-      <h1 style={{ marginTop: '32px' }}>Weiteres</h1>
-      <button onClick={() => (location.hash = '#/setup')}>Einrichtung wiederholen</button>
-      <button onClick={() => (location.hash = '#/test')}>Testseite</button>
-      <button onClick={() => (location.hash = '#/')}>Zum Start</button>
+        <section class="card">
+          <h1>Weiteres</h1>
+          <div class="actions">
+            <button onClick={() => (location.hash = '#/setup')}>Einrichtung wiederholen</button>
+            <button onClick={() => (location.hash = '#/test')}>Testseite</button>
+            <button onClick={() => (location.hash = '#/')}>Zum Start</button>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

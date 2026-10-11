@@ -39,7 +39,16 @@ export function App() {
     setSettings(s);
   };
 
-  if (error) return <div class="admin screen">{error}</div>;
+  if (error)
+    return (
+      <div class="admin screen">
+        <div class="admin-inner">
+          <section class="card">
+            <p class="error">{error}</p>
+          </section>
+        </div>
+      </div>
+    );
   if (!db || !settings) return <div class="patient screen" />;
 
   switch (resolveRoute(hash, settings)) {

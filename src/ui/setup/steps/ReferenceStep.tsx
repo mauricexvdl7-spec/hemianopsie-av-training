@@ -64,7 +64,7 @@ export function ReferenceStep(props: {
   }
 
   return (
-    <div>
+    <section class="card">
       <h1>Reaktionszeit rechts</h1>
       {state.phase === 'intro' && (
         <>
@@ -72,17 +72,21 @@ export function ReferenceStep(props: {
             Sag ihm: „Schau auf das Kreuz und tippe, sobald rechts ein Licht erscheint.“ Es folgen {REFERENCE_TRIALS} kurze Durchgänge ohne
             Ton, etwa zwei Minuten.
           </p>
-          <button class="primary" onClick={() => setState({ phase: 'running' })}>
-            Starten
-          </button>
+          <div class="actions">
+            <button class="primary" onClick={() => setState({ phase: 'running' })}>
+              Starten
+            </button>
+          </div>
         </>
       )}
       {state.phase === 'aborted' && (
         <>
           <p class="error">Abgebrochen (App verlassen oder iPad gedreht). Bitte noch einmal.</p>
-          <button class="primary" onClick={() => setState({ phase: 'running' })}>
-            Noch einmal
-          </button>
+          <div class="actions">
+            <button class="primary" onClick={() => setState({ phase: 'running' })}>
+              Noch einmal
+            </button>
+          </div>
         </>
       )}
       {state.phase === 'done' && (
@@ -94,12 +98,14 @@ export function ReferenceStep(props: {
               : ' Zu wenige Treffer für eine eigene Messung, es gilt der Standardwert.'}{' '}
             Antwortfenster: {state.windowMs} ms.
           </p>
-          <button onClick={() => setState({ phase: 'running' })}>Wiederholen</button>
-          <button class="primary" onClick={() => props.onNext({ referenceRtsMs: state.rts, responseWindowMs: state.windowMs })}>
-            Weiter
-          </button>
+          <div class="actions">
+            <button onClick={() => setState({ phase: 'running' })}>Wiederholen</button>
+            <button class="primary" onClick={() => props.onNext({ referenceRtsMs: state.rts, responseWindowMs: state.windowMs })}>
+              Weiter
+            </button>
+          </div>
         </>
       )}
-    </div>
+    </section>
   );
 }

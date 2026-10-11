@@ -1,6 +1,6 @@
 /**
  * Training (Stand M2): eine Sitzung mit 60 Durchgängen unter adaptiver Steuerung (Karte, Ortswahl, Treppe, Phasen),
- * danach „Heute X von Y gefunden.“ Die Sitzung lebt in einem Ref und überdauert Pausen innerhalb derselben App-Sitzung.
+ * danach „Heute gefunden: X von Y“ mit Balken. Die Sitzung lebt in einem Ref und überdauert Pausen innerhalb derselben App-Sitzung.
  * Zeitgesteuerte 30-Minuten-Sitzungen mit Pausen folgen in M3.
  */
 import { useRef, useState } from 'preact/hooks';
@@ -68,21 +68,35 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
   if (view.kind === 'paused') {
     return (
       <div class="patient screen overlay-message" onClick={resume}>
-        {windowOk()
-          ? 'Pause. Tippe zum Weitermachen.'
-          : window.innerWidth < window.innerHeight
-            ? 'Bitte das iPad quer halten.'
-            : 'Bitte die App im Vollbild verwenden.'}
+        <div class="patient-right">
+          <div class="message-card card">
+            <p class="message-text">
+              {windowOk()
+                ? 'Pause. Tippe zum Weitermachen.'
+                : window.innerWidth < window.innerHeight
+                  ? 'Bitte das iPad quer halten.'
+                  : 'Bitte die App im Vollbild verwenden.'}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div class="patient screen summary" onClick={props.onExit}>
-      <div>
-        Heute {view.found} von {view.total} gefunden.
+      <div class="patient-right">
+        <div class="message-card card">
+          <p class="summary-lead">Heute gefunden</p>
+          <p class="summary-count">
+            {view.found} <span class="of">von</span> {view.total}
+          </p>
+          <div class="summary-bar" role="img" aria-label={`${view.found} von ${view.total} gefunden`}>
+            <div style={{ width: `${view.total > 0 ? Math.round((100 * view.found) / view.total) : 0}%` }} />
+          </div>
+          <p class="message-hint">Tippe, um zurückzugehen.</p>
+        </div>
       </div>
-      <small>Tippe, um zurückzugehen.</small>
     </div>
   );
 }

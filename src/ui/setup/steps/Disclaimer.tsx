@@ -3,16 +3,18 @@ export const DISCLAIMER_TEXT =
 
 export function Disclaimer(props: { onAccept(): void }) {
   return (
-    <div>
+    <section class="card">
       <h1>Wichtiger Hinweis</h1>
       <p>{DISCLAIMER_TEXT}</p>
       <p class="hint">
         Bitte besprich das Training mit der behandelnden Ärztin oder dem behandelnden Arzt. Bei Unwohlsein, Kopfschmerzen oder
         ungewohnten Seheindrücken das Training beenden.
       </p>
-      <button class="primary" onClick={props.onAccept}>
-        Verstanden
-      </button>
-    </div>
+      <div class="actions">
+        <button class="primary" onClick={props.onAccept}>
+          Verstanden
+        </button>
+      </div>
+    </section>
   );
 }

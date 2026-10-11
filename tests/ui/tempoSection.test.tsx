@@ -8,6 +8,10 @@ import { ExportPage } from '../../src/ui/admin/ExportPage';
 
 let n = 0;
 const settle = () => new Promise((r) => setTimeout(r, 20));
+/** Wartet, bis die Bedingung gilt (IndexedDB ist unter Last langsamer als ein fester Takt). */
+const until = async (cond: () => boolean) => {
+  for (let i = 0; i < 100 && !cond(); i++) await settle();
+};
 const button = (root: Element, text: string) => [...root.querySelectorAll('button')].find((b) => b.textContent === text)!;
 const slider = (root: Element, i: number) => root.querySelectorAll<HTMLInputElement>('input[type="range"]')[i]!;
 const drag = (el: HTMLInputElement, v: string) => {
@@ -22,7 +26,7 @@ describe('Abschnitt Tempo in der Verwaltung', () => {
     document.body.appendChild(root);
     let changed = 0;
     render(<ExportPage db={db} onImported={() => undefined} onSettingsChanged={() => changed++} />, root);
-    await settle();
+    await until(() => root.textContent!.includes('Licht sichtbar'));
 
     expect(root.textContent).toContain('Licht sichtbar: 1,0 s');
     expect(root.textContent).toContain('Pause zwischen den Lichtern, von: 1,5 s');
@@ -37,7 +41,7 @@ describe('Abschnitt Tempo in der Verwaltung', () => {
     expect(root.textContent).toContain('Pause zwischen den Lichtern, bis: 4,5 s');
 
     button(root, 'Tempo speichern').click();
-    await settle();
+    await until(() => root.textContent!.includes('Gespeichert.'));
     const s = await db.getSettings();
     expect(s.timing).toEqual({ plateauMs: 1100, waitMinMs: 4500, waitMaxMs: 4500, responseWindowMinMs: 3000 });
     expect(s.responseWindowMs).toBe(3000);
@@ -48,7 +52,7 @@ describe('Abschnitt Tempo in der Verwaltung', () => {
     await settle();
     expect(root.textContent).toContain('Licht sichtbar: 1,0 s');
     button(root, 'Tempo speichern').click();
-    await settle();
+    await until(() => root.textContent!.includes('Gespeichert.'));
     expect((await db.getSettings()).timing).toEqual(DEFAULT_TIMING);
     expect((await db.getSettings()).responseWindowMs).toBe(2000);
 
