@@ -122,36 +122,43 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
   };
   await db.addSession(session);
   const records: TrialRecord[] = [];
+  // Nur die Zeit, in der ein Lauf wirklich spielt: Pausen zwischen den Läufen und Hintergrundzeit zählen nicht (Spec 9).
+  let activeMs = 0;
 
   return {
     planner,
     session,
     records,
     async run(deps) {
-      const done = records.filter((r) => r.outcome !== 'aborted').length;
-      const recs = await runBlock({
-        db,
-        planner,
-        deps,
-        sessionId: args.sessionId,
-        trials: Math.max(0, args.trials - done),
-        nowIso: () => args.now().toISOString(),
-        onTrial: args.onTrial,
-        transform: (r) => planner.apply(r),
-      });
-      records.push(...recs);
-      session.trialCount = records.length;
-      const aborted = recs.at(-1)?.outcome === 'aborted';
-      if (aborted) {
-        // Fortschritt sichern, Sitzung bleibt offen.
-        await db.saveController(planner.state());
-        await db.updateSession(session);
+      const runStart = args.now().getTime();
+      try {
+        const done = records.filter((r) => r.outcome !== 'aborted').length;
+        const recs = await runBlock({
+          db,
+          planner,
+          deps,
+          sessionId: args.sessionId,
+          trials: Math.max(0, args.trials - done),
+          nowIso: () => args.now().toISOString(),
+          onTrial: args.onTrial,
+          transform: (r) => planner.apply(r),
+        });
+        records.push(...recs);
+        session.trialCount = records.length;
+        const aborted = recs.at(-1)?.outcome === 'aborted';
+        if (aborted) {
+          // Fortschritt sichern, Sitzung bleibt offen.
+          await db.saveController(planner.state());
+          await db.updateSession(session);
+        }
+        return { records: recs, aborted };
+      } finally {
+        activeMs += Math.max(0, args.now().getTime() - runStart);
       }
-      return { records: recs, aborted };
     },
     async finish() {
       const endedAt = args.now();
-      const durationMin = (endedAt.getTime() - startedAt.getTime()) / 60000;
+      const durationMin = activeMs / 60000;
       const summary = planner.summary(durationMin);
       const ended = endSession(planner.state(), summary, endedAt.toISOString());
       await db.saveController(ended);

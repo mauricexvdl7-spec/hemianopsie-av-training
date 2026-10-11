@@ -3,12 +3,12 @@
  * danach „Heute gefunden: X von Y“ mit Balken. Die Sitzung lebt in einem Ref und überdauert Pausen innerhalb derselben App-Sitzung.
  * Zeitgesteuerte 30-Minuten-Sitzungen mit Pausen folgen in M3.
  */
-import { useRef, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { createRng } from '../../core/rng';
 import { DEFAULT_WINDOW_MS } from '../../core/trial';
 import type { AudioEngine } from '../../io/audio';
 import type { Db, Settings } from '../../store/db';
-import { currentGeometry } from '../browserDeps';
+import { planningGeometry } from '../browserDeps';
 import { blockSummary } from '../routing';
 import { SESSION_TRIALS_M2, newId, startTrainingSession, type TrainingSession } from '../session';
 import { TrialStage } from '../TrialStage';
@@ -22,6 +22,17 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
   const windowOk = () => viewportMatches(props.settings.setupViewport, window.innerWidth, window.innerHeight);
   const [view, setView] = useState<View>(() => (windowOk() ? { kind: 'running', run: 0 } : { kind: 'paused' }));
   const training = useRef<TrainingSession | null>(null);
+  // Drehen oder Fenstergröße ändern: neu zeichnen, damit der Hinweis der Pause-Ansicht stimmt und das Tippen wieder wirkt
+  const [, setWindowTick] = useState(0);
+  useEffect(() => {
+    const onChange = () => setWindowTick((n) => n + 1);
+    window.addEventListener('resize', onChange);
+    window.addEventListener('orientationchange', onChange);
+    return () => {
+      window.removeEventListener('resize', onChange);
+      window.removeEventListener('orientationchange', onChange);
+    };
+  }, []);
 
   const resume = () => {
     if (!windowOk()) return;
@@ -40,7 +51,8 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
           training.current ??= await startTrainingSession({
             db: props.db,
             deps,
-            geometry: currentGeometry(geometry),
+            // Planung (Raster, Kartensignatur) immer mit der Fenstergröße der Einrichtung, sonst setzt ein Unterschied von wenigen Pixeln die Karte zurück
+            geometry: planningGeometry(geometry, props.settings.setupViewport),
             // Alte Einstellungen können ein Fenster unter der heutigen Untergrenze enthalten
             responseWindowMs: Math.max(props.settings.responseWindowMs ?? DEFAULT_WINDOW_MS, props.settings.timing.responseWindowMinMs),
             timing: props.settings.timing,

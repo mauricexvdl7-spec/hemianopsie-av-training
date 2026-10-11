@@ -46,6 +46,15 @@ export function currentGeometry(input: GeometryInput): Geometry {
   return makeGeometry(input, window.innerWidth, window.innerHeight);
 }
 
+/**
+ * Geometrie für die Planung (Rasterpunkte, Kartensignatur): die Fenstergröße der Einrichtung, sonst das Live-Fenster.
+ * Training ist im Fenster bis ±2 % der Einrichtung erlaubt; schon wenige Pixel können ändern, welche Rasterpunkte
+ * passen, und würden die Karte zurücksetzen. Gezeichnet wird weiter mit dem Live-Fenster (`currentGeometry`).
+ */
+export function planningGeometry(input: GeometryInput, setup: { width: number; height: number } | null): Geometry {
+  return setup ? makeGeometry(input, setup.width, setup.height) : currentGeometry(input);
+}
+
 export function isLandscape(): boolean {
   return window.innerWidth >= window.innerHeight;
 }

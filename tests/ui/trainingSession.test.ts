@@ -50,6 +50,7 @@ function setup(over: Partial<Parameters<typeof runTrainingSession>[0]> = {}) {
   return (async () => {
     const db = await openDb(`training-db-${n++}`);
     let clock = Date.UTC(2026, 9, 11, 10, 0, 0);
+    const ticks: number[] = [];
     const args = {
       db,
       deps: autoDeps(null),
@@ -58,17 +59,21 @@ function setup(over: Partial<Parameters<typeof runTrainingSession>[0]> = {}) {
       trials: SESSION_TRIALS_M2,
       sessionId: 'sess-1',
       // Jeder Aufruf der Uhr vergeht eine Sekunde: Beginn und Ende sind unterscheidbar.
-      now: () => new Date((clock += 1000)),
+      now: () => {
+        const t = (clock += 1000);
+        ticks.push(t);
+        return new Date(t);
+      },
       rng: createRng(7),
       ...over,
     };
-    return { db, args };
+    return { db, args, ticks };
   })();
 }
 
 describe('runTrainingSession', () => {
   it('60 Durchgänge: Records, Treppenwerte, Controller, Snapshot und Sitzung', async () => {
-    const { db, args } = await setup();
+    const { db, args, ticks } = await setup();
     const res = await runTrainingSession(args);
     expect(res.aborted).toBe(false);
     expect(res.records).toHaveLength(SESSION_TRIALS_M2);
@@ -102,10 +107,12 @@ describe('runTrainingSession', () => {
     expect(s.summary).not.toBeNull();
     expect(s.summary!.stage).toBe('1');
     expect(s.summary!.leftHitRate).toBe(1);
-    // Dauer aus Start und Ende der injizierten Uhr, in Minuten.
-    const minutes = (Date.parse(s.endedAtIso!) - Date.parse(s.startedAtIso)) / 60000;
+    // Dauer = aktive Laufzeit: Uhr am Anfang des Laufs (2. Aufruf, nach dem Sitzungsbeginn) bis zu seinem Ende
+    // (vorletzter Aufruf; der letzte ist das Sitzungsende). Der Sitzungsbeginn davor zählt nicht.
+    const minutes = (ticks.at(-2)! - ticks[1]!) / 60000;
     expect(s.summary!.durationMin).toBeCloseTo(minutes, 6);
     expect(s.summary!.durationMin).toBeGreaterThan(0);
+    expect(s.summary!.durationMin).toBeLessThan((Date.parse(s.endedAtIso!) - Date.parse(s.startedAtIso)) / 60000);
   });
 
   it('Abbruch im 5. Durchgang: aborted, Controller gespeichert, Sitzung nicht beendet', async () => {
@@ -160,6 +167,36 @@ describe('runTrainingSession', () => {
     const s = (await db.listSessions())[0]!;
     expect(s.endedAtIso).not.toBeNull();
     expect(s.trialCount).toBe(all.length);
+  });
+
+  it('Dauer zählt nur die aktive Laufzeit: Abbruch, lange Pause und Fortsetzen (Pause und Hintergrund zählen nicht)', async () => {
+    let offsetMs = 0;
+    const base = Date.UTC(2026, 9, 11, 10, 0, 0);
+    // Jeder Durchgang dauert 10 s (Uhr springt beim Speichern), zwischen den Läufen vergehen 14 Minuten.
+    const { db, args } = await setup({
+      now: () => new Date(base + offsetMs),
+      onTrial: () => {
+        offsetMs += 10_000;
+      },
+      deps: autoDeps(2),
+      trials: 5,
+    });
+    const handle = await startTrainingSession(args);
+    offsetMs += 60_000; // Sitzung ist angelegt, die Person tippt noch nicht los (zählt nicht)
+    const first = await handle.run(args.deps);
+    expect(first.aborted).toBe(true);
+    expect(first.records).toHaveLength(3); // 2 gewertete + 1 abgebrochen = 30 s aktiv
+    offsetMs += 14 * 60_000; // App im Hintergrund, Pause-Ansicht, Kaffee
+    const second = await handle.run(autoDeps(null));
+    expect(second.aborted).toBe(false);
+    expect(second.records).toHaveLength(3); // 3 weitere Durchgänge = 30 s aktiv
+    offsetMs += 5 * 60_000; // Zusammenfassung wird lange angezeigt, bevor finish() läuft
+    await handle.finish();
+
+    const s = (await db.listSessions())[0]!;
+    expect(s.summary!.durationMin).toBeCloseTo(1, 6);
+    // Die Wanduhr lag dagegen bei über 20 Minuten.
+    expect((Date.parse(s.endedAtIso!) - Date.parse(s.startedAtIso)) / 60000).toBeGreaterThan(20);
   });
 
   it('gespeicherter Controller wird weitergeführt (Sitzungszähler 2)', async () => {
