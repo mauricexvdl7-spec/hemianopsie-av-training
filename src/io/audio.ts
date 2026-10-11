@@ -180,6 +180,24 @@ export class AudioEngine {
     }
   }
 
+  /**
+   * Spielt eine Aufnahme (z. B. eigene Ansage) über Master-Gain und Limiter, also mit demselben Deckel wie alle Töne.
+   * Dekodiert eine Kopie (`decodeAudioData` entkoppelt den Puffer, das Original bleibt nutzbar).
+   * Erfüllt sich bei `ended`; lehnt ab, wenn der Kontext fehlt oder nicht läuft oder die Dekodierung scheitert.
+   */
+  async playClip(data: ArrayBuffer): Promise<void> {
+    const { ctx, master } = this;
+    if (!ctx || !master || !this.isRunning()) throw new Error('Audio läuft nicht.');
+    const buffer = await ctx.decodeAudioData(data.slice(0));
+    await new Promise<void>((resolve) => {
+      const src = ctx.createBufferSource();
+      src.buffer = buffer;
+      src.connect(master);
+      src.onended = () => resolve();
+      src.start();
+    });
+  }
+
   /** Testton für die Einrichtung: 30° links bzw. rechts auf Augenhöhe. */
   testSide(side: Side): void {
     this.scheduleBurst({ pos: { side, eccDeg: 30, angleDeg: 0 }, gainDb: 0, atSec: this.nowSec() + 0.05, rampMs: 150, plateauMs: 300 });

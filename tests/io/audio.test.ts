@@ -11,7 +11,7 @@ function node(extra: Record<string, unknown> = {}) {
 /** Minimaler Fake eines AudioContext; merkt sich erzeugte Gain-Knoten. */
 function fakeContext(state: string) {
   const gains: Array<{ gain: ReturnType<typeof param> }> = [];
-  const sources: Array<{ start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; onended: (() => void) | null }> = [];
+  const sources: Array<{ connect: ReturnType<typeof vi.fn>; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; onended: (() => void) | null }> = [];
   const oscillators: Array<{ start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }> = [];
   const ctx = {
     state,
@@ -40,6 +40,7 @@ function fakeContext(state: string) {
     }),
     createPanner: vi.fn(() => node({ positionX: param(), positionY: param(), positionZ: param() })),
     createStereoPanner: vi.fn(() => node({ pan: param() })),
+    decodeAudioData: vi.fn(async (_data: ArrayBuffer) => ({ duration: 1 })),
   };
   return { ctx, gains, sources, oscillators };
 }
@@ -168,6 +169,48 @@ describe('AudioEngine Abbruch des Tons (Spec 10: Ton endet spätestens 1 s nach 
     ctx.state = 'running';
     eng.playChime();
     expect(oscillators).toHaveLength(2);
+  });
+});
+
+describe('AudioEngine.playClip (Aufnahmen über Master und Limiter)', () => {
+  it('dekodiert eine Kopie, verbindet die Quelle mit dem Master und erfüllt sich bei onended', async () => {
+    const { ctx, gains, sources } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    await eng.ensureRunning();
+    const data = new Uint8Array([1, 2, 3, 4]).buffer;
+    let settled = false;
+    const p = eng.playClip(data).then(() => (settled = true));
+    await vi.waitFor(() => expect(sources).toHaveLength(1));
+    const decoded = ctx.decodeAudioData.mock.calls[0]![0];
+    expect(decoded).not.toBe(data);
+    expect(decoded.byteLength).toBe(4);
+    expect(data.byteLength).toBe(4);
+    const src = sources[0]!;
+    expect(src.connect).toHaveBeenCalledWith(gains[0]); // gains[0] ist der Master
+    expect(src.start).toHaveBeenCalledTimes(1);
+    expect(settled).toBe(false);
+    src.onended?.();
+    await p;
+    expect(settled).toBe(true);
+  });
+
+  it('lehnt ab, solange der Kontext fehlt oder nicht läuft', async () => {
+    const { ctx } = fakeContext('running');
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    await expect(eng.playClip(new ArrayBuffer(4))).rejects.toThrow();
+    await eng.ensureRunning();
+    ctx.state = 'interrupted';
+    await expect(eng.playClip(new ArrayBuffer(4))).rejects.toThrow();
+    expect(ctx.decodeAudioData).not.toHaveBeenCalled();
+  });
+
+  it('lehnt ab, wenn die Dekodierung scheitert', async () => {
+    const { ctx, sources } = fakeContext('running');
+    ctx.decodeAudioData.mockRejectedValueOnce(new Error('bad data'));
+    const eng = new AudioEngine(() => ctx as unknown as AudioContext);
+    await eng.ensureRunning();
+    await expect(eng.playClip(new ArrayBuffer(4))).rejects.toThrow('bad data');
+    expect(sources).toHaveLength(0);
   });
 });
 
