@@ -51,8 +51,10 @@ export interface SessionRecord {
   stage?: Stage | null;
 }
 
-/** Momentaufnahme der Schwellen-Karte (je Sitzung höchstens eine). */
+/** Momentaufnahme der Schwellen-Karte; je Sitzung und Anlass höchstens eine (Schlüssel `id`). */
 export interface MapSnapshot {
+  /** `${sessionId}:${reason}` – so überschreibt der Sitzungsabschluss nie die alte Karte bei Rasterwechsel. */
+  id: string;
   sessionId: string;
   atIso: string;
   gridSignature: string;
@@ -105,7 +107,7 @@ export async function openDb(name: string = DB_NAME): Promise<Db> {
       // Version 2: nur neue Speicher, vorhandene Daten bleiben unverändert.
       if (oldVersion < 2) {
         db.createObjectStore('controller');
-        db.createObjectStore('mapSnapshots', { keyPath: 'sessionId' });
+        db.createObjectStore('mapSnapshots', { keyPath: 'id' });
       }
     },
   });

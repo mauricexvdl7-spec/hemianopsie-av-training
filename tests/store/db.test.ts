@@ -21,9 +21,9 @@ const session = (id: string): SessionRecord => ({
 
 const geo = makeGeometry({ screenWidthCm: 24, viewingDistanceCm: 40, fixationXFraction: 2 / 3, fixationYFraction: 0.5 }, 1180, 820);
 
-const snapshot = (sessionId: string): MapSnapshot => {
+const snapshot = (sessionId: string, reason: MapSnapshot['reason'] = 'sessionEnd'): MapSnapshot => {
   const c = createControllerState(geo);
-  return { sessionId, atIso: '2026-10-11T10:05:00.000Z', gridSignature: c.gridSignature, map: c.map, stage: '1', reason: 'sessionEnd' };
+  return { id: `${sessionId}:${reason}`, sessionId, atIso: '2026-10-11T10:05:00.000Z', gridSignature: c.gridSignature, map: c.map, stage: '1', reason };
 };
 
 describe('Db', () => {
@@ -115,11 +115,28 @@ describe('Controller-Zustand und Karten-Snapshots', () => {
   it('Snapshots anlegen und listen', async () => {
     const db = await freshDb();
     await db.addMapSnapshot(snapshot('s1'));
-    await db.addMapSnapshot({ ...snapshot('s2'), reason: 'gridChanged' });
+    await db.addMapSnapshot(snapshot('s2', 'gridChanged'));
     const list = await db.listMapSnapshots();
     expect(list.map((s) => s.sessionId).sort()).toEqual(['s1', 's2']);
     expect(list.find((s) => s.sessionId === 's2')!.reason).toBe('gridChanged');
     expect(list.find((s) => s.sessionId === 's1')!.map).toEqual(snapshot('s1').map);
+  });
+
+  it('zwei Snapshots einer Sitzung mit verschiedenem Grund bleiben beide erhalten', async () => {
+    const db = await freshDb();
+    await db.addMapSnapshot(snapshot('s1', 'gridChanged'));
+    await db.addMapSnapshot(snapshot('s1', 'sessionEnd'));
+    const list = await db.listMapSnapshots();
+    expect(list.map((s) => s.id).sort()).toEqual(['s1:gridChanged', 's1:sessionEnd']);
+  });
+
+  it('derselbe Snapshot zweimal gespeichert ergibt einen (idempotent, letzter gilt)', async () => {
+    const db = await freshDb();
+    await db.addMapSnapshot(snapshot('s1'));
+    await db.addMapSnapshot({ ...snapshot('s1'), atIso: '2026-10-11T11:00:00.000Z' });
+    const list = await db.listMapSnapshots();
+    expect(list).toHaveLength(1);
+    expect(list[0]!.atIso).toBe('2026-10-11T11:00:00.000Z');
   });
 
   it('Sitzungen mit Zusammenfassung und Stufe bleiben erhalten', async () => {

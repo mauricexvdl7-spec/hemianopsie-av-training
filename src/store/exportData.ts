@@ -54,7 +54,7 @@ function parseBundle(x: unknown): Omit<ExportBundle, 'schema' | 'exportedAtIso'>
   if (b.schema !== EXPORT_SCHEMA) return null;
   const { controller, mapSnapshots } = b;
   const controllerOk = controller === null || (typeof controller === 'object' && controller !== undefined && 'version' in controller);
-  if (!controllerOk || !Array.isArray(mapSnapshots) || !mapSnapshots.every((m) => hasStringId(m, 'sessionId'))) return null;
+  if (!controllerOk || !Array.isArray(mapSnapshots) || !mapSnapshots.every((m) => hasStringId(m, 'id') && hasStringId(m, 'sessionId'))) return null;
   return { ...base, controller: controller ?? null, mapSnapshots };
 }
 

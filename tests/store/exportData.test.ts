@@ -13,9 +13,9 @@ const geo = makeGeometry({ screenWidthCm: 24, viewingDistanceCm: 40, fixationXFr
 const sess = (id: string): SessionRecord => ({
   id, startedAtIso: 'a', endedAtIso: 'b', dayKey: '2026-10-11', kind: 'training', trialCount: 0, summary: null, stage: null,
 });
-const snap = (sessionId: string): MapSnapshot => {
+const snap = (sessionId: string, reason: MapSnapshot['reason'] = 'sessionEnd'): MapSnapshot => {
   const c = createControllerState(geo);
-  return { sessionId, atIso: '2026-10-11T10:05:00.000Z', gridSignature: c.gridSignature, map: c.map, stage: '1', reason: 'sessionEnd' };
+  return { id: `${sessionId}:${reason}`, sessionId, atIso: '2026-10-11T10:05:00.000Z', gridSignature: c.gridSignature, map: c.map, stage: '1', reason };
 };
 
 const HEADER =
@@ -61,7 +61,28 @@ describe('Export und Import', () => {
     expect((await db.listTrials()).map((t) => t.id)).toEqual(['alt-0']);
     expect(await db.listSessions()).toHaveLength(1);
     expect(await db.getController()).toEqual(controller);
-    expect((await db.listMapSnapshots()).map((s) => s.sessionId)).toEqual(['alt']);
+    expect((await db.listMapSnapshots()).map((s) => s.id)).toEqual(['alt:sessionEnd']);
+  });
+
+  it('scheitert der Import erst bei den Snapshots (doppelte ID), bleibt alles beim Alten', async () => {
+    const db = await freshDb();
+    await db.addSession({ ...sess('alt'), endedAtIso: null });
+    const controller = { ...createControllerState(geo), sessionCount: 4 };
+    await db.saveController(controller);
+    await db.addMapSnapshot(snap('alt'));
+    const bad = {
+      schema: EXPORT_SCHEMA,
+      exportedAtIso: 'x',
+      settings: DEFAULT_SETTINGS,
+      sessions: [sess('neu')],
+      trials: [],
+      controller: null,
+      mapSnapshots: [snap('neu'), snap('neu')],
+    };
+    await expect(importAll(db, bad)).rejects.toThrow();
+    expect((await db.listSessions()).map((s) => s.id)).toEqual(['alt']);
+    expect(await db.getController()).toEqual(controller);
+    expect((await db.listMapSnapshots()).map((s) => s.id)).toEqual(['alt:sessionEnd']);
   });
 
   it('Datensätze ohne ID werden vor dem Löschen abgelehnt', async () => {
@@ -78,16 +99,18 @@ describe('Export und Import', () => {
     const summary = { stage: '1' as const, durationMin: 11, meanLeftLevel: 6, leftHitRate: 0.8 };
     await a.saveController(controller);
     await a.addSession({ ...sess('s1'), summary, stage: '1' });
+    await a.addMapSnapshot(snap('s1', 'gridChanged'));
     await a.addMapSnapshot(snap('s1'));
     const bundle = await exportAll(a, '2026-10-11T12:00:00.000Z');
     expect(bundle.schema).toBe('sehtraining-export/2');
     expect(bundle.controller).toEqual(controller);
-    expect(bundle.mapSnapshots).toHaveLength(1);
+    expect(bundle.mapSnapshots).toHaveLength(2);
 
     const b = await freshDb();
     await b.saveController(createControllerState(geo));
     await b.addMapSnapshot(snap('alt'));
     await importAll(b, JSON.parse(JSON.stringify(bundle)));
+    expect((await b.listMapSnapshots()).map((m) => m.id).sort()).toEqual(['s1:gridChanged', 's1:sessionEnd']);
     expect(await b.getController()).toEqual(controller);
     expect(await b.listMapSnapshots()).toEqual(await a.listMapSnapshots());
     expect(await b.listSessions()).toEqual(await a.listSessions());
@@ -124,6 +147,10 @@ describe('Export und Import', () => {
     await expect(importAll(db, { ...base, controller: {}, mapSnapshots: [] })).rejects.toThrow(/Format/);
     await expect(importAll(db, { ...base, controller: null })).rejects.toThrow(/Format/); // snapshots fehlen
     await expect(importAll(db, { ...base, controller: null, mapSnapshots: [{}] })).rejects.toThrow(/Format/);
+    const { id: _id, ...noId } = snap('s1');
+    await expect(importAll(db, { ...base, controller: null, mapSnapshots: [noId] })).rejects.toThrow(/Format/);
+    const { sessionId: _sid, ...noSession } = snap('s1');
+    await expect(importAll(db, { ...base, controller: null, mapSnapshots: [noSession] })).rejects.toThrow(/Format/);
     expect(await db.listTrials()).toHaveLength(1);
   });
 
