@@ -1,19 +1,19 @@
-/** Training (Stand M1): ein Block mit 20 Durchgängen, Phase 1 fest, danach „Heute X von Y gefunden.“ */
+/**
+ * Training (Stand M2): eine Sitzung mit 60 Durchgängen unter adaptiver Steuerung (Karte, Ortswahl, Treppe, Phasen),
+ * danach „Heute X von Y gefunden.“ Die Sitzung lebt in einem Ref und überdauert Pausen innerhalb derselben App-Sitzung.
+ * Zeitgesteuerte 30-Minuten-Sitzungen mit Pausen folgen in M3.
+ */
 import { useRef, useState } from 'preact/hooks';
-import { createBasicPlanner } from '../../core/blocks';
 import { createRng } from '../../core/rng';
 import { DEFAULT_WINDOW_MS } from '../../core/trial';
-import type { TrialRecord } from '../../core/types';
 import type { AudioEngine } from '../../io/audio';
-import type { Db, SessionRecord, Settings } from '../../store/db';
+import type { Db, Settings } from '../../store/db';
 import { currentGeometry } from '../browserDeps';
 import { blockSummary } from '../routing';
-import { dayKey, newId, runBlock } from '../session';
+import { SESSION_TRIALS_M2, newId, startTrainingSession, type TrainingSession } from '../session';
 import { TrialStage } from '../TrialStage';
 import { unlockAudio } from '../unlockAudio';
 import { viewportMatches } from '../validate';
-
-export const M1_BLOCK_TRIALS = 20;
 
 type View = { kind: 'running'; run: number } | { kind: 'paused' } | { kind: 'summary'; found: number; total: number };
 
@@ -21,23 +21,7 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
   const geometry = props.settings.geometry!;
   const windowOk = () => viewportMatches(props.settings.setupViewport, window.innerWidth, window.innerHeight);
   const [view, setView] = useState<View>(() => (windowOk() ? { kind: 'running', run: 0 } : { kind: 'paused' }));
-  const records = useRef<TrialRecord[]>([]);
-  const session = useRef<SessionRecord | null>(null);
-  const planner = useRef<ReturnType<typeof createBasicPlanner> | null>(null);
-
-  const ensureSession = async (): Promise<SessionRecord> => {
-    if (!session.current) {
-      const now = new Date();
-      session.current = { id: newId(), startedAtIso: now.toISOString(), endedAtIso: null, dayKey: dayKey(now), kind: 'training', trialCount: 0 };
-      await props.db.addSession(session.current);
-      planner.current = createBasicPlanner(createRng(Date.now() >>> 0), {
-        sessionId: session.current.id,
-        geometry: currentGeometry(geometry),
-        responseWindowMs: props.settings.responseWindowMs ?? DEFAULT_WINDOW_MS,
-      });
-    }
-    return session.current;
-  };
+  const training = useRef<TrainingSession | null>(null);
 
   const resume = () => {
     if (!windowOk()) return;
@@ -52,29 +36,28 @@ export function TrainingScreen(props: { db: Db; audio: AudioEngine; settings: Se
         geometry={geometry}
         audio={props.audio}
         run={async (deps) => {
-          const s = await ensureSession();
-          const done = records.current.filter((r) => r.outcome !== 'aborted').length;
-          const recs = await runBlock({
+          // Der Planer bleibt über Pausen hinweg derselbe; nur beim ersten Mal wird die Sitzung begonnen.
+          training.current ??= await startTrainingSession({
             db: props.db,
-            planner: planner.current!,
             deps,
-            sessionId: s.id,
-            trials: M1_BLOCK_TRIALS - done,
-            nowIso: () => new Date().toISOString(),
+            geometry: currentGeometry(geometry),
+            responseWindowMs: props.settings.responseWindowMs ?? DEFAULT_WINDOW_MS,
+            trials: SESSION_TRIALS_M2,
+            sessionId: newId(),
+            now: () => new Date(),
             onTrial: (r) => {
               if (r.outcome === 'hit') props.audio.playChime();
             },
+            rng: createRng(Date.now() >>> 0),
           });
-          records.current.push(...recs);
-          s.trialCount = records.current.length;
-          if (recs.at(-1)?.outcome === 'aborted') {
-            await props.db.updateSession(s);
+          const t = training.current;
+          const { aborted } = await t.run(deps);
+          if (aborted) {
             setView({ kind: 'paused' });
             return;
           }
-          s.endedAtIso = new Date().toISOString();
-          await props.db.updateSession(s);
-          setView({ kind: 'summary', ...blockSummary(records.current) });
+          await t.finish();
+          setView({ kind: 'summary', ...blockSummary(t.records) });
         }}
       />
     );

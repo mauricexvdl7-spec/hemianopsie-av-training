@@ -32,9 +32,21 @@ Beim ersten Start öffnet sich der Einrichtungsassistent. Später erreichst du i
 
 ## Tägliche Nutzung
 
-Stand M1: Auf dem Startbildschirm auf „Start“ tippen (oder irgendwo). Er schaut auf das Kreuz und tippt auf den Bildschirm, sobald er ein Licht sieht. Nach 20 Durchgängen erscheint „Heute X von Y gefunden.“ Wird die App verlassen oder das iPad gedreht, pausiert das Training; ein Tippen setzt es fort.
+Auf dem Startbildschirm auf „Start“ tippen (oder irgendwo). Er schaut auf das Kreuz und tippt auf den Bildschirm, sobald er ein Licht sieht. Eine Sitzung hat seit M2 60 Durchgänge; danach erscheint „Heute X von Y gefunden.“ Wird die App verlassen oder das iPad gedreht, pausiert das Training; ein Tippen setzt dieselbe Sitzung fort, ohne dass Karte und Treppe etwas verlieren.
 
-Sprachansagen, Pausen alle 5 Minuten, 30-Minuten-Sitzungen und das Tageslimit kommen mit Meilenstein 3.
+Sprachansagen, Pausen alle 5 Minuten, 30-Minuten-Sitzungen und das Tageslimit kommen mit Meilenstein 3. Bis dahin dauert eine Sitzung nur etwa zweieinhalb Minuten. Das Phasenkriterium verlangt aber mindestens 10 Minuten je Sitzung. Deshalb erreicht vorerst keine echte Sitzung dieses Kriterium, und das Training bleibt in Phase 1, bis M3 die zeitgesteuerten Sitzungen bringt.
+
+## Wie das Training sich anpasst
+
+**Die Karte.** Die App führt für jeden Punkt im linken Halbfeld Buch darüber, wie hell ein Licht dort sein muss, damit er es sieht (die „Schwelle“). Jeder Treffer und jeder Fehlversuch verbessert die Schätzung, auch für die Nachbarpunkte, weil benachbarte Orte ähnlich sehen. Ältere Messungen zählen mit der Zeit weniger (nach etwa sieben Sitzungen nur noch halb), damit Fortschritte sichtbar werden. Durchgänge ganz ohne Licht zeigen, wie oft er rät; das wird herausgerechnet.
+
+**Die Ortswahl.** Geprüft werden vor allem Orte, an denen er ein Licht etwa zwei von drei Mal sieht. Das ist die Grenzzone, in der Üben am meisten bringt. Orte, die er sicher sieht oder gar nicht sieht, kommen seltener dran. Etwa jeder siebte Ort wird zufällig gewählt, damit nichts übersehen wird. Derselbe Ort kommt nie zweimal direkt hintereinander.
+
+**Die Treppe.** Für oben, Mitte und unten gibt es je eine Helligkeitsstufe. Nach zwei Treffern in Folge wird das Licht schwächer, nach einem Fehlversuch stärker. Zuerst geht es in großen Schritten, nach der ersten Umkehr in kleinen. So pendelt die Schwierigkeit um das, was er gerade noch schafft. Rechte Durchgänge, Durchgänge ohne Licht und abgebrochene verändern weder Treppe noch Karte.
+
+**Die Phasen.** In Phase 1 kommt der Ton gleichzeitig mit dem Licht. Dann kommt der Ton etwas vor dem Licht, wird in Phase 3 leiser und erklingt in Phase 4 nur noch bei einem Teil der Durchgänge. In Phase 5 gibt es keinen Ton mehr. Zwischendurch kommen gelegentlich Durchgänge nur mit Licht und Durchgänge mit einem Ton auf der falschen Seite, damit er sich nicht allein auf den Ton verlässt. Die App geht erst weiter, wenn mehrere gute Sitzungen hintereinander ähnlich schwierig waren, und einen Schritt zurück, wenn es dreimal in Folge deutlich schlechter lief.
+
+Auf der Testseite (`#/test`) zeigt der Abschnitt **Karte** den gespeicherten Stand. Hell heißt „sieht er gut“, dunkel heißt „sieht er kaum“, wahlweise als Trefferwahrscheinlichkeit bei Stufe 6 oder als Schwelle. Die Testseite verändert die Karte nie. Unter **Simulation** durchläuft ein simulierter Proband fünf Sitzungen. Schätzung und wahre Karte erscheinen nebeneinander, dazu der mittlere Schwellenfehler. Die Simulation läuft auf einem frischen, nicht gespeicherten Zustand und schreibt nichts in die Datenbank.
 
 ## Datenexport
 

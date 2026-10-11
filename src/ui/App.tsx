@@ -57,7 +57,7 @@ export function App() {
     case 'export':
       return <ExportPage db={db} onImported={() => void reload()} />;
     case 'test':
-      return <TestPage audio={audio} settings={settings} />;
+      return <TestPage db={db} audio={audio} settings={settings} />;
     case 'start':
     case 'train':
       if (training) {

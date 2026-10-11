@@ -1,14 +1,18 @@
-/** Testseite: einzelne Reize mit wählbarer Stufe, Ort und Ton zeigen (Spec 12). */
-import { useState } from 'preact/hooks';
+/** Testseite: einzelne Reize zeigen (Spec 12), gespeicherte Schwellen-Karte ansehen, Simulation ausprobieren. */
+import { useEffect, useState } from 'preact/hooks';
+import type { ControllerState } from '../../core/controller';
 import { LEVEL_COUNT, PLATEAU_MS, RAMP_MS, levelParams } from '../../core/stimulus';
 import type { Side, SoundCondition, TrialRecord } from '../../core/types';
 import { checkTrialPlan } from '../../core/safety';
 import type { AudioEngine } from '../../io/audio';
-import type { Settings } from '../../store/db';
+import type { Db, Settings } from '../../store/db';
+import { currentGeometry } from '../browserDeps';
 import { runTrial } from '../runner';
 import { TrialStage } from '../TrialStage';
+import { MapModeToggle, MapView, cellsFromMap, type MapMode } from './MapView';
+import { SIM_SESSIONS, SIM_TRIALS_PER_SESSION, simulateMap, type SimulationResult } from './simulation';
 
-export function TestPage(props: { audio: AudioEngine; settings: Settings }) {
+export function TestPage(props: { db: Db; audio: AudioEngine; settings: Settings }) {
   const [level, setLevel] = useState(6);
   const [side, setSide] = useState<Side>('L');
   const [ecc, setEcc] = useState(8);
@@ -16,6 +20,22 @@ export function TestPage(props: { audio: AudioEngine; settings: Settings }) {
   const [sound, setSound] = useState<SoundCondition>('sync');
   const [running, setRunning] = useState(0);
   const [result, setResult] = useState<TrialRecord | null>(null);
+  // undefined = lädt, null = noch keine Karte gespeichert
+  const [controller, setController] = useState<ControllerState | null | undefined>(undefined);
+  const [mode, setMode] = useState<MapMode>('prob');
+  const [sim, setSim] = useState<SimulationResult | null>(null);
+  const [simBusy, setSimBusy] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    props.db
+      .getController()
+      .then((c) => alive && setController(c))
+      .catch(() => alive && setController(null));
+    return () => {
+      alive = false;
+    };
+  }, [props.db]);
   const p = levelParams(level);
 
   const plan = {
@@ -102,6 +122,61 @@ export function TestPage(props: { audio: AudioEngine; settings: Settings }) {
           Ergebnis: {result.outcome}
           {result.rtMs !== null ? `, Reaktionszeit ${Math.round(result.rtMs)} ms` : ''}
         </p>
+      )}
+
+      <h2>Karte</h2>
+      {controller === undefined && <p class="hint">Wird geladen …</p>}
+      {controller === null && <p class="hint">Noch keine Karte gespeichert. Sie entsteht beim Training.</p>}
+      {controller && (
+        <>
+          <p class="hint">
+            Gespeicherter Stand nach {controller.sessionCount} {controller.sessionCount === 1 ? 'Sitzung' : 'Sitzungen'}, Trainingsstufe{' '}
+            {controller.phase.stage}. Die Testseite ändert die Karte nicht.
+          </p>
+          <MapModeToggle mode={mode} onChange={setMode} />
+          <MapView title="Gespeicherte Karte" cells={cellsFromMap(controller.map, controller.guess)} mode={mode} />
+        </>
+      )}
+
+      <h2>Simulation</h2>
+      <p class="hint">
+        Ein simulierter Proband mit linksseitigem Ausfall durchläuft {SIM_SESSIONS} Sitzungen mit je {SIM_TRIALS_PER_SESSION} Durchgängen auf einem
+        frischen Zustand. Es wird nichts gespeichert.
+      </p>
+      <button
+        disabled={simBusy}
+        onClick={() => {
+          setSimBusy(true);
+          setSimError(null);
+          // Erst zeichnen lassen („läuft …“), dann rechnen.
+          setTimeout(() => {
+            try {
+              setSim(simulateMap(currentGeometry(props.settings.geometry!), Date.now() >>> 0));
+            } catch (e) {
+              setSimError(e instanceof Error ? e.message : String(e));
+            }
+            setSimBusy(false);
+          }, 30);
+        }}
+      >
+        {SIM_SESSIONS} Sitzungen simulieren
+      </button>
+      {simBusy && <p class="hint">Simulation läuft …</p>}
+      {simError && <p class="error">{simError}</p>}
+      {sim && (
+        <>
+          <p>
+            Mittlerer Schwellenfehler (RMSE): {sim.rmse === null ? 'nicht berechenbar' : `${sim.rmse.toFixed(2)} Stufen`}
+            {sim.rmse !== null && ` (über ${sim.rmsePoints} Orte, an denen der Proband etwas sehen kann)`}
+            <br />
+            <span class="hint">Startwert {sim.seed}. Der Fehler schwankt von Lauf zu Lauf.</span>
+          </p>
+          <MapModeToggle mode={mode} onChange={setMode} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+            <MapView title="Geschätzte Karte" cells={sim.estimate} mode={mode} />
+            <MapView title="Wahre Karte" cells={sim.truth} mode={mode} />
+          </div>
+        </>
       )}
     </div>
   );

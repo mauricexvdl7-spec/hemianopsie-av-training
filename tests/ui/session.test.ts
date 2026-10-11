@@ -84,4 +84,21 @@ describe('runBlock', () => {
     expect(recs[2]!.outcome).toBe('aborted');
     expect(await db.listTrials('s')).toHaveLength(3);
   });
+
+  it('transform läuft vor dem Speichern: gespeichert wird der umgewandelte Datensatz', async () => {
+    const db = await openDb(`session-db-${n++}`);
+    const recs = await runBlock({
+      db,
+      planner: planner(),
+      deps: autoDeps(null),
+      sessionId: 's',
+      trials: 3,
+      nowIso: () => '2026-10-11T10:00:00.000Z',
+      transform: (r) => ({ ...r, stairBefore: 4, stairAfter: 5 }),
+    });
+    expect(recs.every((r) => r.stairBefore === 4 && r.stairAfter === 5)).toBe(true);
+    const saved = await db.listTrials('s');
+    expect(saved).toHaveLength(3);
+    expect(saved.every((r) => r.stairBefore === 4 && r.stairAfter === 5)).toBe(true);
+  });
 });
