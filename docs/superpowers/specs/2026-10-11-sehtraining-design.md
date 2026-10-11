@@ -15,7 +15,7 @@ Die App ist **kein Medizinprodukt** und stellt keine Diagnosen. Sie ergänzt är
 ## 2. Plattform und Auslieferung
 
 - **Gerät:** iPad (iPadOS, Safari/WebKit). Jeder Browser auf dem iPad nutzt WebKit.
-- **Auslieferung:** PWA, statisch gehostet auf GitHub Pages aus dem öffentlichen Repo `Aporia-Evo/sehtraining`. Er installiert sie einmal über „Zum Home-Bildschirm“. Danach läuft sie offline über einen Service Worker, Updates kommen beim nächsten Start mit Netz.
+- **Auslieferung:** PWA, statisch ausgeliefert über Cloudflare (Workers mit statischen Assets, `wrangler.jsonc`) aus dem öffentlichen Repo `mauricexvdl7-spec/hemianopsie-av-training`. Er installiert sie einmal über „Zum Home-Bildschirm“. Danach läuft sie offline über einen Service Worker, Updates kommen beim nächsten Start mit Netz.
 - **Datenschutz:** kein Backend, keine Cloud, keine Telemetrie, keine Analytics, keine externen Schriften oder CDNs. Alle Daten liegen in IndexedDB auf dem iPad. Ins Repo kommt nur Code, nie Exporte, Fotos oder Aufnahmen.
 - **Dieselbe PWA läuft auch in Chrome am Windows-PC.** Das ist nur für Auswertung und den optionalen Serial-Trigger gedacht.
 - **Plattformgrenzen iPad:**
@@ -84,7 +84,7 @@ src/
 
 **Lichtreiz:**
 - Gauß-Fleck, hell auf dunkelgrauem Hintergrund (#3c3c3c).
-- Hüllkurve 600 ms: 150 ms Cosinus-Rampe hoch, 300 ms Plateau, 150 ms Rampe runter.
+- Hüllkurve standardmäßig 1000 ms: 150 ms Cosinus-Rampe hoch, 700 ms Plateau, 150 ms Rampe runter. Das Plateau ist einstellbar (300–1500 ms, Entscheidung 8).
 
 **Reizstufen:**
 - 12 Stufen L = 0…11, logarithmisch abgestuft.
@@ -100,13 +100,13 @@ src/
 
 **Ablauf eines Durchgangs:**
 1. Fixationskreuz (1°, hellgrau). Ansage „Schau auf das Kreuz.“ beim ersten Durchgang jeder Sitzung.
-2. Ohne Kamera: zufällige Wartezeit 1,0–2,5 s, gleichverteilt. Mit Kamera: Start, sobald der Blick 500 ms stabil auf dem Kreuz liegt (Toleranz 4°). Nach 5 s ohne stabile Fixation startet der Reiz trotzdem, mit `fixationOk = false`.
+2. Ohne Kamera: zufällige Wartezeit standardmäßig 1,5–3,5 s, gleichverteilt, einstellbar (untere Grenze nie unter 1,0 s). Mit Kamera: Start, sobald der Blick 500 ms stabil auf dem Kreuz liegt (Toleranz 4°). Nach 5 s ohne stabile Fixation startet der Reiz trotzdem, mit `fixationOk = false`.
 3. Reiz und Ton nach Phase (Abschnitt 9). Die Reizzeit t0 ist der Beginn der Lichtrampe.
 4. Antwort: Tippen irgendwo auf den Bildschirm oder ein Tastendruck (Buzzer).
    - Antwort 150 ms bis T nach t0: Treffer.
    - Antwort vor 150 ms: vorweggenommen.
    - Antwort bei einem Durchgang ohne Reiz: falscher Alarm.
-   - T = Median + 3 · MAD der Referenz-Reaktionszeiten, begrenzt auf 1500–3000 ms.
+   - T = Median + 3 · MAD der Referenz-Reaktionszeiten, begrenzt auf 2000–3000 ms (Untergrenze einstellbar 1500–4000 ms; liegt sie über 3000 ms, gilt sie auch als Obergrenze).
 5. Optional (Einstellung, Standard aus): Nach dem Treffer zeigt er auf die Stelle. Gespeichert werden der Zeigeort und der Fehler in Grad.
 6. Rückmeldung: Bei einem Treffer ein leiser, weicher Glockenton. Sonst nichts. Es gibt keine negativen Geräusche.
 7. Zwischen dem Ende eines Reizes und dem Beginn des nächsten liegt mindestens 1 s.
@@ -353,7 +353,8 @@ Nach jedem Meilenstein: Commit, Push, kurzer Bericht an den Angehörigen, README
 4. Karte: Variante A (Schwellen-Karte).
 5. Architektur (Abschnitt 4), Kartenmathematik (7, 8), Ablauf, Phasen und Sicherheit (6, 9, 10) bestätigt.
 6. Phasenwechsel nach benötigter Reizstärke statt nach Trefferquote (Abweichung vom Prompt, begründet in 9). Nur-Licht-Anteil von 10 % in jeder Phase.
-7. Eigenes öffentliches Repo `Aporia-Evo/sehtraining`, GitHub Pages (kostenlos). Nur Code im Repo.
+7. Eigenes öffentliches Repo, nur Code im Repo. Seit 11.10.2026 `mauricexvdl7-spec/hemianopsie-av-training`, Auslieferung über Cloudflare (GitHub Pages scheiterte an einer Kontosperre).
+8. Tempo ruhiger (Nutzer, 11.10.2026, nach erstem Test: „Licht zu kurz, zu wenig Pause“): Licht 1,0 s sichtbar (Plateau 700 ms), Wartezeit 1,5–3,5 s, Antwortfenster mindestens 2,0 s. Alle drei Werte einstellbar; die Sicherheitsregel ≥ 1 s zwischen zwei Reizen bleibt unverändert. Folge: Bei längerem Licht kann er öfter vor dem Ende zum Reiz blicken; das stärkt das Erkunden nach links, macht die Karte aber etwas großzügiger. Ab Meilenstein 4 (Kamera) wird das über den ersten Blicksprung sichtbar.
 
 ## 19. Bewusst nicht enthalten
 

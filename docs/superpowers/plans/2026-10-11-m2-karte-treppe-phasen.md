@@ -385,3 +385,36 @@ tests/core/{map,guessRate,staircase,selector,phases,controller,sim,acceptance}.t
 - [ ] **Step 5: Manuelle Prüfung (Playwright, wie M1, Skript in `.work/`)** — Einrichtung → Training 60 Durchgänge mit Auto-Tipper → IndexedDB: Controller `sessionCount 1`, Snapshot vorhanden; Testseite: Karte sichtbar, „5 Sitzungen simulieren“ zeigt zwei Karten und RMSE ≤ 1,5; Screenshots.
 - [ ] **Step 6: README** — Abschnitt „Wie das Training sich anpasst“ (Karte, Ortswahl, Treppe, Phasen in Alltagssprache, je 2–3 Sätze), Hinweis auf M3 für Sitzungslänge.
 - [ ] **Step 7: Commit und Push** `feat(ui): Training mit adaptiver Steuerung, Karte auf der Testseite`
+
+---
+
+### Task 9: Tempo ruhiger und einstellbar (Nutzerentscheidung 8, 11.10.2026)
+
+**Files:**
+- Create: `src/core/timing.ts`
+- Modify: `src/core/stimulus.ts` (Standard-Plateau), `src/core/blocks.ts` (Grundplaner: Wartezeit/Plateau aus Timing), `src/core/controller.ts` (dto.), `src/core/trial.ts` (Fenster-Untergrenze als Parameter), `src/store/db.ts` (`Settings.timing`), `src/ui/admin/ExportPage.tsx` (Abschnitt „Tempo“), Aufrufer in `src/ui/**` (Timing aus den Einstellungen durchreichen), betroffene Tests, `README.md`
+- Test: `tests/core/timing.test.ts` + Anpassungen bestehender Tests
+
+**Interfaces:**
+- Produces:
+  ```ts
+  // timing.ts
+  export interface TimingSettings { plateauMs: number; waitMinMs: number; waitMaxMs: number; responseWindowMinMs: number }
+  export const DEFAULT_TIMING: TimingSettings = { plateauMs: 700, waitMinMs: 1500, waitMaxMs: 3500, responseWindowMinMs: 2000 };
+  export const TIMING_LIMITS = { plateauMs: [300, 1500], waitMinMs: [1000, 5000], waitMaxMs: [1000, 6000], responseWindowMinMs: [1500, 4000] } as const;
+  export function clampTiming(t: Partial<TimingSettings>): TimingSettings; // fehlende Felder aus DEFAULT_TIMING, jedes Feld in seine Grenzen, waitMaxMs ≥ waitMinMs
+  // trial.ts
+  export function responseWindowFromReference(rtsMs: readonly number[], minMs?: number /* Standard DEFAULT_TIMING.responseWindowMinMs */): number; // Median + 3·MAD, begrenzt auf [minMs, max(3000, minMs)]; < 5 Werte → max(DEFAULT_WINDOW_MS, minMs)
+  // stimulus.ts: PLATEAU_MS = 700 (Standard); RAMP_MS bleibt 150
+  // Planer-Optionen (createBasicPlanner, createSessionPlanner): optionales `timing?: TimingSettings` (Standard DEFAULT_TIMING) → plateauMs, waitMs = U(waitMinMs, waitMaxMs) (beim Controller weiter + Vorlauf des Tons)
+  // db.ts: Settings.timing: TimingSettings (DEFAULT_SETTINGS.timing = DEFAULT_TIMING; getSettings füllt fehlendes timing auf)
+  ```
+- Admin-Seite `#/export`, neuer Abschnitt „Tempo“ (bis M3 der PIN-Bereich kommt): drei Schieber mit Anzeige in Sekunden – „Licht sichtbar“ (Gesamtdauer = Plateau + 300 ms, 0,6–1,8 s), „Pause zwischen den Lichtern“ (zwei Schieber oder ein Bereich: von/bis), „Zeit zum Tippen mindestens“ (1,5–4,0 s); Knopf „Standard wiederherstellen“; Speichern über `clampTiming`. Antwortfenster in den Einstellungen wird beim Speichern mit der neuen Untergrenze neu berechnet, wenn Referenz-RTs vorliegen.
+
+- [ ] **Step 1: Failing tests** — `clampTiming({})` = `DEFAULT_TIMING`; Werte außerhalb werden geklemmt; `waitMaxMs < waitMinMs` → `waitMaxMs = waitMinMs`; `waitMinMs` nie < 1000; `responseWindowFromReference([500..580])` = 2000 (neue Untergrenze), mit `minMs 1500` = 1500, mit `minMs 3500` und kleinen RTs = 3500; Grundplaner und Controller: Standard-Pläne haben `plateauMs 700`, Wartezeit in [1500, 3500] (Controller: abzüglich SOA-Vorlauf, d. h. Zeit bis zum ersten Reiz in [1500, 3500]); mit `timing = { plateauMs: 300, waitMinMs: 1000, waitMaxMs: 1000 }` bleibt die Lücke zwischen Reizen bei schnellster Taktung ≥ 1000 ms (Sicherheit); `getSettings` alter Einstellungen ohne `timing` liefert `DEFAULT_TIMING`.
+- [ ] **Step 2: Run → FAIL**
+- [ ] **Step 3: Implementieren** (bestehende Tests, die 300 ms / 1000–2500 ms / 1500 ms fest erwarten, auf die neuen Standards bzw. explizite Timing-Optionen umstellen – nicht abschwächen)
+- [ ] **Step 4: Run → PASS; `npm run typecheck && npm run build`**
+- [ ] **Step 5: README** — Abschnitt „Tempo einstellen“ (2–3 Sätze).
+- [ ] **Step 6: Commit** `feat: ruhigeres Tempo, einstellbar (Licht, Pause, Antwortzeit)`
+
