@@ -129,3 +129,39 @@ describe('AudioEngine Zustand und Latenz', () => {
     expect(eng.outputLatencySec()).toBe(0);
   });
 });
+
+describe('Pegel (Nutzerbefund 11.10.: am PC kaum hörbar)', () => {
+  it('Rauschen wird auf festen Effektivwert normiert, Spitzen bleiben in [-1, 1]', async () => {
+    const { normalizeRms, NOISE_RMS } = await import('../../src/io/audio');
+    const data = new Float32Array(48000);
+    let x = 1;
+    for (let i = 0; i < data.length; i++) {
+      x = (x * 1103515245 + 12345) % 2147483648; // deterministisches Rauschen
+      data[i] = (x / 2147483648 - 0.5) * 0.02;
+    }
+    normalizeRms(data, NOISE_RMS);
+    let s = 0;
+    let peak = 0;
+    for (const v of data) {
+      s += v * v;
+      peak = Math.max(peak, Math.abs(v));
+    }
+    expect(Math.sqrt(s / data.length)).toBeCloseTo(NOISE_RMS, 2);
+    expect(peak).toBeLessThanOrEqual(1);
+  });
+
+  it('bei Startlautstärke (50 %) etwa −18 dBFS effektiv, bei 100 % höchstens −12 dBFS vor dem Limiter', async () => {
+    const { NOISE_RMS, MASTER_GAIN_CAP: cap } = await import('../../src/io/audio');
+    const db = (x: number) => 20 * Math.log10(x);
+    expect(db(NOISE_RMS * cap * 0.5)).toBeGreaterThan(-20);
+    expect(db(NOISE_RMS * cap * 0.5)).toBeLessThan(-15);
+    expect(db(NOISE_RMS * cap * 1)).toBeLessThanOrEqual(-12);
+  });
+
+  it('Glockenton deutlich, aber leiser als das Rauschen (Spitze ≈ −20 dBFS bei 50 %)', async () => {
+    const { CHIME_PEAK, MASTER_GAIN_CAP: cap } = await import('../../src/io/audio');
+    const db = 20 * Math.log10(CHIME_PEAK * cap * 0.5);
+    expect(db).toBeGreaterThan(-23);
+    expect(db).toBeLessThan(-17);
+  });
+});
