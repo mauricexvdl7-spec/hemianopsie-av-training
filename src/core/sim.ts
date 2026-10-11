@@ -13,7 +13,7 @@ import { guessRate } from './guessRate';
 import { summarizePoint } from './map';
 import type { Rng } from './rng';
 import { REFERENCE_LEVEL, levelParams } from './stimulus';
-import { DEFAULT_WINDOW_MS, classifyResponse } from './trial';
+import { DEFAULT_WINDOW_MS, classifyResponse, effectiveWindowMs } from './trial';
 import type { SoundCondition, TrialPlan, TrialRecord, VisualPos } from './types';
 
 export interface SimOptions {
@@ -122,7 +122,7 @@ export function runSimulatedSession(
     const record: TrialRecord = {
       ...plan,
       startedAtIso: atIso,
-      outcome: classifyResponse(plan.kind, rtMs, plan.responseWindowMs),
+      outcome: classifyResponse(plan.kind, rtMs, effectiveWindowMs(plan)),
       rtMs,
       contrast: params ? params.contrast : null,
       sigmaDeg: params ? params.sigmaDeg : null,

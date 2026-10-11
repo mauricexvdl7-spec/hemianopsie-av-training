@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyResponse, responseWindowFromReference, MIN_RT_MS, DEFAULT_WINDOW_MS } from '../../src/core/trial';
+import { classifyResponse, effectiveWindowMs, responseWindowFromReference, MIN_RT_MS, DEFAULT_WINDOW_MS } from '../../src/core/trial';
 import type { TrialKind } from '../../src/core/types';
 
 describe('classifyResponse', () => {
@@ -13,15 +13,33 @@ describe('classifyResponse', () => {
     ['right', 400, 'hit'],
     ['catch', 500, 'falseAlarm'],
     ['catch', null, 'correctRejection'],
-    ['catch', 100, 'falseAlarm'],
+    ['catch', 150, 'falseAlarm'],
+    ['catch', 2000, 'falseAlarm'],
     ['catch', 2500, 'correctRejection'],
   ])('%s rt=%s → %s', (k, rt, o) => {
     expect(classifyResponse(k as TrialKind, rt as number | null, 2000)).toBe(o);
   });
 
+  it.each([
+    [100, 'anticipation'],
+    [149, 'anticipation'],
+    [-300, 'anticipation'],
+    [0, 'anticipation'],
+  ])('catch rt=%s (Tipp in der Wartezeit vor dem Durchgang) → %s, kein falscher Alarm', (rt, o) => {
+    expect(classifyResponse('catch', rt, 2000)).toBe(o);
+  });
+
   it('Konstanten', () => {
     expect(MIN_RT_MS).toBe(150);
     expect(DEFAULT_WINDOW_MS).toBe(2000);
+  });
+});
+
+describe('effectiveWindowMs', () => {
+  it('mindestens so lang wie der Reiz (2·Rampe + Plateau)', () => {
+    expect(effectiveWindowMs({ responseWindowMs: 1500, rampMs: 150, plateauMs: 1500 })).toBe(1800);
+    expect(effectiveWindowMs({ responseWindowMs: 2000, rampMs: 150, plateauMs: 300 })).toBe(2000);
+    expect(effectiveWindowMs({ responseWindowMs: 2000, rampMs: 150, plateauMs: 1700 })).toBe(2000);
   });
 });
 

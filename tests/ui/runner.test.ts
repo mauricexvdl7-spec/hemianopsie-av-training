@@ -24,6 +24,25 @@ describe('runTrial', () => {
     expect(r.stimulusPx!.x).toBeLessThan(800);
   });
 
+  it('Fenster kürzer als der Reiz (Plateau 1500 + Fenster 1500): Tipp bei noch sichtbarem Licht ist ein Treffer', async () => {
+    const f = fakeDeps();
+    const p = runTrial(samplePlan({ plateauMs: 1500, responseWindowMs: 1500 }), f.deps, ISO);
+    f.respondAt(T0 + 1700); // Reiz dauert bis T0 + 1800, das Antwortfenster allein nur bis T0 + 1500
+    f.advanceTo(T0 + 2000);
+    const r = await p;
+    expect(r.outcome).toBe('hit');
+    expect(r.rtMs).toBe(1700);
+  });
+
+  it('Fenster kürzer als der Reiz: Tipp ohne Reiz bei noch laufendem Fenster ist ein falscher Alarm', async () => {
+    const f = fakeDeps();
+    const plan = samplePlan({ kind: 'catch', pos: null, gridPointId: null, level: null, sound: 'none', plateauMs: 1500, responseWindowMs: 1500 });
+    const p = runTrial(plan, f.deps, ISO);
+    f.respondAt(T0 + 1700);
+    f.advanceTo(T0 + 2000);
+    expect((await p).outcome).toBe('falseAlarm');
+  });
+
   it('Treffer endet erst nach dem Ausblenden', async () => {
     const f = fakeDeps();
     let done = false;
@@ -47,6 +66,14 @@ describe('runTrial', () => {
     const r = await p;
     expect(r.outcome).toBe('miss');
     expect(r.rtMs).toBeNull();
+  });
+
+  it('ohne Reiz: Tipp in der Wartezeit → Vorwegnahme, kein falscher Alarm', async () => {
+    const f = fakeDeps();
+    const p = runTrial(samplePlan({ kind: 'catch', pos: null, gridPointId: null, level: null, sound: 'none' }), f.deps, ISO);
+    f.respondAt(T0 - 600);
+    f.advanceTo(T0 + 2100);
+    expect((await p).outcome).toBe('anticipation');
   });
 
   it('Antwort 100 ms vor t0 → vorweggenommen', async () => {

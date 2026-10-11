@@ -4,7 +4,7 @@
  */
 import { sigmaDegToPx, visualToPx, type Geometry } from '../core/geometry';
 import { envelope, levelParams } from '../core/stimulus';
-import { classifyResponse } from '../core/trial';
+import { classifyResponse, effectiveWindowMs } from '../core/trial';
 import type { TrialPlan, TrialRecord } from '../core/types';
 import type { ResponseEvent } from '../io/input';
 
@@ -64,7 +64,7 @@ export function runTrial(plan: TrialPlan, deps: RunnerDeps, startedAtIso: string
       resolve({
         ...plan,
         startedAtIso,
-        outcome: abortReason ? 'aborted' : classifyResponse(plan.kind, rtMs, plan.responseWindowMs),
+        outcome: abortReason ? 'aborted' : classifyResponse(plan.kind, rtMs, effectiveWindowMs(plan)),
         rtMs: abortReason ? null : rtMs,
         contrast: stim?.contrast ?? null,
         sigmaDeg: stim?.sigmaDeg ?? null,

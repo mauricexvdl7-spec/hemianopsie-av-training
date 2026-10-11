@@ -6,10 +6,23 @@ export const MIN_RT_MS = 150;
 export const DEFAULT_WINDOW_MS = 2000;
 export const WINDOW_MAX_MS = 3000;
 
-/** rtMs relativ zu t0 (Beginn der Lichtrampe), null ohne Antwort. */
+/**
+ * Das Fenster, in dem eine Antwort gewertet wird: nie kürzer als der Reiz selbst (2·Rampe + Plateau),
+ * sonst zählte ein Tipp bei noch sichtbarem Licht als verpasst.
+ */
+export function effectiveWindowMs(p: { responseWindowMs: number; rampMs: number; plateauMs: number }): number {
+  return Math.max(p.responseWindowMs, 2 * p.rampMs + p.plateauMs);
+}
+
+/**
+ * rtMs relativ zu t0 (Beginn der Lichtrampe), null ohne Antwort.
+ * Ohne Reiz: Ein Tipp vor MIN_RT_MS (auch in der Wartezeit, rt < 0) ist eine Vorwegnahme und kein falscher Alarm;
+ * nur Tipps im Fenster ab MIN_RT_MS zählen als falscher Alarm.
+ */
 export function classifyResponse(kind: TrialKind, rtMs: number | null, windowMs: number): Outcome {
   if (kind === 'catch') {
-    return rtMs !== null && rtMs <= windowMs ? 'falseAlarm' : 'correctRejection';
+    if (rtMs === null || rtMs > windowMs) return 'correctRejection';
+    return rtMs < MIN_RT_MS ? 'anticipation' : 'falseAlarm';
   }
   if (rtMs === null || rtMs > windowMs) return 'miss';
   if (rtMs < MIN_RT_MS) return 'anticipation';

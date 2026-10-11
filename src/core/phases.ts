@@ -170,6 +170,7 @@ export function setStageManually(s: PhaseState, stage: Stage, atIso: string): Ph
     history: [],
     sessionsInStage: 0,
     levelBeforeChange: null,
+    sessionsSinceChange: 0,
     lockSessions: 0,
     log: [...s.log, { atIso, from: s.stage, to: stage, reason: 'manual' }],
   };

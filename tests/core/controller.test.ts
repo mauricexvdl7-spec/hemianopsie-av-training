@@ -17,6 +17,7 @@ import {
   gridSignature,
   type ControllerState,
 } from '../../src/core/controller';
+import { classifyResponse } from '../../src/core/trial';
 import { sampleRecord } from '../helpers/plans';
 
 const geo = (distanceCm = 40) =>
@@ -304,6 +305,16 @@ describe('apply()', () => {
     expect(p.state().map).toEqual(before.map);
     expect(p.state().stairs).toEqual(before.stairs);
     expect(guessRate(p.state().guess)).toBeGreaterThan(guessRate(before.guess));
+  });
+
+  it('catch + Vorwegnahme (Tipp in der Wartezeit) verändert γ, Karte und Treppe nicht', () => {
+    const p = planner();
+    const plan = nextOf(p, 'catch');
+    const before = p.state();
+    const out = p.apply(recordOf(plan, classifyResponse('catch', -200, 2000), { rtMs: -200 }));
+    expect(out.outcome).toBe('anticipation');
+    expect(p.state()).toEqual(before);
+    expect(p.state().guess).toEqual(before.guess);
   });
 
   it('nutzt die tatsächliche (verschobene) Position für die Karte', () => {

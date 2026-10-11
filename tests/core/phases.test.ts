@@ -207,4 +207,10 @@ describe('setStageManually', () => {
     expect(st.lockSessions).toBe(0);
     expect(st.log[st.log.length - 1]).toEqual({ atIso: '2026-03-01T09:00:00Z', from: '2', to: '4a', reason: 'manual' });
   });
+
+  it('setzt auch sessionsSinceChange auf 0', () => {
+    const base = { ...run(atStage('2', { levelBeforeChange: 5 }), [s(6)]), sessionsSinceChange: 4 };
+    expect(base.sessionsSinceChange).toBe(4);
+    expect(setStageManually(base, '3a', '2026-03-01T09:00:00Z').sessionsSinceChange).toBe(0);
+  });
 });
