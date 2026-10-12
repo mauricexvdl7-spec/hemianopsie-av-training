@@ -33,7 +33,8 @@ export async function runBlock(args: {
   sessionId: string;
   trials: number;
   nowIso(): string;
-  onTrial?(r: TrialRecord): void;
+  /** Wird nach dem Speichern jedes Durchgangs aufgerufen und abgewartet. */
+  onTrial?(r: TrialRecord): void | Promise<void>;
   /** Wandelt den Datensatz um, bevor er gespeichert wird (z. B. `planner.apply`). */
   transform?(r: TrialRecord): TrialRecord;
   /** Wird vor jedem Durchgang gefragt; ist die Antwort wahr, endet der Block ohne weiteren Durchgang. */
@@ -47,7 +48,7 @@ export async function runBlock(args: {
     const rec = args.transform ? args.transform(raw) : raw;
     await args.db.addTrial(rec);
     out.push(rec);
-    args.onTrial?.(rec);
+    await args.onTrial?.(rec);
     if (rec.outcome === 'aborted') break;
   }
   return out;
@@ -72,7 +73,7 @@ export interface TrainingSessionArgs {
   grid?: GridConfig;
   sessionId: string;
   now(): Date;
-  onTrial?(r: TrialRecord): void;
+  onTrial?(r: TrialRecord): void | Promise<void>;
   rng: Rng;
 }
 
@@ -99,13 +100,14 @@ export interface TrainingSession {
 
 /**
  * Schließt Trainingssitzungen, die nie beendet wurden (App geschlossen, Absturz): Ende = Beginn ihres letzten
- * Durchgangs, sonst ihr eigener Beginn. Es gibt keine Phasenbewertung (`summary` bleibt leer).
+ * Durchgangs, sonst ihr eigener Beginn; `trialCount` folgt den gespeicherten Durchgängen. Es gibt keine Phasenbewertung (`summary` bleibt leer).
  */
 async function closeOrphanSessions(db: Db, exceptId: string): Promise<void> {
   const open = (await db.listSessions()).filter((s) => s.kind === 'training' && s.endedAtIso === null && s.id !== exceptId);
   for (const s of open) {
-    const last = (await db.listTrials(s.id)).map((t) => t.startedAtIso).sort().at(-1);
-    await db.updateSession({ ...s, endedAtIso: last ?? s.startedAtIso });
+    const trials = await db.listTrials(s.id);
+    const last = trials.map((t) => t.startedAtIso).sort().at(-1);
+    await db.updateSession({ ...s, endedAtIso: last ?? s.startedAtIso, trialCount: trials.length });
   }
 }
 
@@ -171,11 +173,15 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
           trials: Math.max(0, target - done),
           shouldStop: opts?.stopWhen,
           nowIso: () => args.now().toISOString(),
-          onTrial: args.onTrial,
+          // Zählung sofort speichern: Eine abrupt beendete Sitzung zählt so schon ab dem ersten Durchgang fürs Tageslimit.
+          onTrial: async (r) => {
+            records.push(r);
+            session.trialCount = records.length;
+            await db.updateSession(session);
+            await args.onTrial?.(r);
+          },
           transform: (r) => planner.apply(r),
         });
-        records.push(...recs);
-        session.trialCount = records.length;
         const aborted = recs.at(-1)?.outcome === 'aborted';
         if (aborted) {
           // Fortschritt sichern, Sitzung bleibt offen.

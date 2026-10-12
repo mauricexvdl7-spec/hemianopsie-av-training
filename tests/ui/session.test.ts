@@ -62,7 +62,9 @@ describe('runBlock', () => {
       sessionId: 's',
       trials: 20,
       nowIso: () => '2026-10-11T10:00:00.000Z',
-      onTrial: (r) => seen.push(r.id),
+      onTrial: (r) => {
+        seen.push(r.id);
+      },
     });
     expect(recs).toHaveLength(20);
     expect(recs.every((r) => r.outcome === 'hit')).toBe(true);

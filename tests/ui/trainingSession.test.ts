@@ -322,6 +322,33 @@ describe('runTrainingSession', () => {
       expect(byId.get('sess-1')!.endedAtIso).toBeNull();
     });
 
+    it('trialCount steht schon nach dem ersten gespeicherten Durchgang in der DB (Lauf noch nicht beendet)', async () => {
+      const { db, args } = await setup({ trials: 3 });
+      const seen: number[] = [];
+      let finished = false;
+      const handle = await startTrainingSession({
+        ...args,
+        onTrial: async () => {
+          expect(finished).toBe(false);
+          seen.push((await db.listSessions())[0]!.trialCount);
+        },
+      });
+      await handle.run(args.deps);
+      finished = true;
+      expect(seen).toEqual([1, 2, 3]);
+    });
+
+    it('geschlossene offene Sitzung übernimmt trialCount aus den gespeicherten Durchgängen', async () => {
+      const { db, args } = await setup({ trials: 1 });
+      await db.addSession({ id: 'old', startedAtIso: '2026-10-11T09:00:00.000Z', endedAtIso: null, dayKey: '2026-10-11', kind: 'training', trialCount: 0 });
+      await db.addTrial(sampleRecord({ id: 'old-0', sessionId: 'old', startedAtIso: '2026-10-11T09:05:00.000Z' }));
+      await db.addTrial(sampleRecord({ id: 'old-1', sessionId: 'old', startedAtIso: '2026-10-11T09:10:00.000Z' }));
+      await startTrainingSession(args);
+      const old = (await db.listSessions()).find((s) => s.id === 'old')!;
+      expect(old.trialCount).toBe(2);
+      expect(old.endedAtIso).toBe('2026-10-11T09:10:00.000Z');
+    });
+
     it('Abbruch, dann neue Sitzung: die gespeicherte Karte wird nicht noch einmal vergessen', async () => {
       const { db, args } = await setup({ deps: autoDeps(10), trials: 30 });
       const first = await runTrainingSession(args);
