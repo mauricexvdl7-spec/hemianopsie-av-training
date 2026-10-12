@@ -13,8 +13,8 @@ import { sampleRecord } from '../helpers/plans';
 const fake = vi.hoisted(() => ({
   log: [] as string[],
   activeMs: 0,
-  /** Ergebnis `aborted` der nächsten Läufe; leer → false. */
-  aborts: [] as boolean[],
+  /** Je Lauf: nach so viel aktiver Zeit dieses Laufs (ms) abbrechen; leer/undefined → kein Abbruch. */
+  aborts: [] as Array<number | undefined>,
   finish: null as null | (() => Promise<void>),
   startArgs: [] as Array<Record<string, unknown>>,
 }));
@@ -39,10 +39,17 @@ vi.mock('../../src/ui/session', async (orig) => ({
     return {
       records: [],
       activeMs: () => fake.activeMs,
-      run: async () => {
+      // Wie die echte Sitzung: vor jedem „Durchgang“ (hier 1 Minute aktive Zeit) stopWhen fragen
+      run: async (_deps: unknown, opts?: { stopWhen?(): boolean }) => {
         fake.log.push('run');
-        fake.activeMs += 300_000;
-        return { records: [], aborted: fake.aborts.shift() ?? false };
+        const abortAfter = fake.aborts.shift();
+        let ran = 0;
+        for (let i = 0; i < 100 && !opts?.stopWhen?.(); i++) {
+          fake.activeMs += 60_000;
+          ran += 60_000;
+          if (abortAfter !== undefined && ran >= abortAfter) return { records: [], aborted: true };
+        }
+        return { records: [], aborted: false };
       },
       finish: fake.finish,
     };
@@ -176,8 +183,61 @@ describe('TrainingScreen', () => {
     expect(root.textContent).toContain('Für heute ist genug, morgen geht es weiter.');
     expect(says()).toEqual(['say:greeting', 'say:dailyLimit']);
     expect(fake.startArgs).toHaveLength(0);
+    await flush(1000);
     await tap();
     expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('Tageslimit: Tippen in der ersten Sekunde (Doppeltipp) verlässt den Hinweis nicht', async () => {
+    const exit = vi.fn();
+    await mount({ db: fakeDb([session('a', TODAY), session('b', TODAY)]), onExit: exit });
+    await flush(500);
+    await tap();
+    expect(exit).not.toHaveBeenCalled();
+    await flush(500);
+    await tap();
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('falsches Fenster beim Start: kein Lauf, Hinweis; nach dem Drehen geht es per Tippen los', async () => {
+    setWindow(820, 1180);
+    await mount();
+    expect(says()).toEqual(['say:greeting', 'say:instruction']);
+    expect(runs()).toBe(0);
+    expect(fake.startArgs).toHaveLength(0);
+    expect(root.textContent).toContain('Bitte das iPad quer halten.');
+    await tap();
+    expect(runs()).toBe(0);
+
+    await act(async () => {
+      setWindow(1180, 820);
+      window.dispatchEvent(new Event('resize'));
+    });
+    await tap();
+    expect(runs()).toBe(1);
+  });
+
+  it('Pausentakt: nach dem Weitermachen kommt die nächste Pause bei 10 Minuten aktiver Zeit', async () => {
+    await mount();
+    expect(fake.activeMs).toBe(300_000);
+    expect(root.textContent).toContain('Kurze Pause');
+    await flush(30_000);
+    await tap();
+    expect(runs()).toBe(2);
+    expect(fake.activeMs).toBe(600_000);
+    expect(root.textContent).toContain('Kurze Pause');
+    expect(says().filter((s) => s === 'say:pauseStart')).toHaveLength(2);
+  });
+
+  it('Pausentakt: eine Unterbrechung bei 2 Minuten setzt den 5-Minuten-Abschnitt nicht zurück', async () => {
+    fake.aborts.push(120_000);
+    await mount();
+    expect(fake.activeMs).toBe(120_000);
+    expect(root.textContent).not.toContain('Kurze Pause');
+    await tap();
+    expect(runs()).toBe(2);
+    expect(fake.activeMs).toBe(300_000);
+    expect(root.textContent).toContain('Kurze Pause');
   });
 
   it('Einleitung: Begrüßung, dann Anleitung, erst danach der erste Lauf', async () => {
@@ -256,6 +316,29 @@ describe('TrainingScreen', () => {
     expect(exit).toHaveBeenCalledTimes(1);
   });
 
+  it('Rückmeldung: Tippen in der ersten Sekunde (Doppeltipp auf „Fertig für heute“) verlässt sie nicht', async () => {
+    const exit = vi.fn();
+    await mount({ db: fakeDb([session('heute', TODAY)], leftTrials('heute', 2, 3)), onExit: exit });
+    await tap(finishButton());
+    expect(root.textContent).toContain('Heute gefunden');
+    await flush(500);
+    await tap();
+    expect(exit).not.toHaveBeenCalled();
+    await flush(500);
+    await tap();
+    expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('gestern nur eine Sitzung mit trialCount 0: Ermutigung, kein Vergleich mit gestern', async () => {
+    // trialCount 0 trotz gespeicherter Durchgänge (offene Sitzung aus M2): zählt wie beim Tageslimit nicht
+    const db = fakeDb([session('heute', TODAY), session('leer', YESTERDAY, 0)], [...leftTrials('heute', 2, 3), ...leftTrials('leer', 1, 2)]);
+    await mount({ db });
+    await tap(finishButton());
+    expect(root.textContent).toContain('Schön, dass du dabei warst.');
+    expect(root.textContent).not.toContain('Gestern');
+    expect(says()).toContain('say:encouragement');
+  });
+
   it('ohne gestern: Ermutigung als Folgesatz', async () => {
     const db = fakeDb([session('heute', TODAY)], leftTrials('heute', 2, 3));
     await mount({ db });
@@ -277,7 +360,7 @@ describe('TrainingScreen', () => {
   });
 
   it('Unterbrechung: „Pause“, Tippen geht sofort weiter', async () => {
-    fake.aborts.push(true);
+    fake.aborts.push(60_000);
     await mount();
     expect(runs()).toBe(1);
     expect(root.textContent).toContain('Pause');
@@ -289,7 +372,7 @@ describe('TrainingScreen', () => {
   });
 
   it('Unterbrechung im Hochformat: Hinweis zum Drehen, Tippen startet nichts', async () => {
-    fake.aborts.push(true);
+    fake.aborts.push(60_000);
     await mount();
     await act(async () => {
       setWindow(820, 1180);

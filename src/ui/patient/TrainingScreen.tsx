@@ -22,6 +22,8 @@ import { flowReducer, INITIAL_FLOW } from './flow';
 
 /** Takt der Pausenuhr (ms). */
 const PAUSE_TICK_MS = 500;
+/** So lange nach dem Erscheinen von Rückmeldung oder Tageslimit wirkt Tippen nicht (Doppeltipp verschluckt sonst die Ansage). */
+const TAP_GUARD_MS = 1000;
 
 export function TrainingScreen(props: {
   db: Db;
@@ -46,6 +48,8 @@ export function TrainingScreen(props: {
   const speech = useRef<Promise<void>>(Promise.resolve());
   /** Wird bei `silence` erhöht: eingereihte, noch nicht begonnene Ansagen entfallen dann. */
   const speechGen = useRef(0);
+  /** Zeitpunkt (`now`), zu dem Rückmeldung oder Tageslimit erschienen sind. */
+  const shownAt = useRef(0);
   // Uhr der Pausenanzeige (Fortschrittsbalken); der Automat ändert sich vor Ablauf der 30 s nicht.
   const [clock, setClock] = useState(() => now());
 
@@ -68,6 +72,10 @@ export function TrainingScreen(props: {
   const stopPauseTimer = () => {
     if (pauseTimer.current !== null) clearInterval(pauseTimer.current);
     pauseTimer.current = null;
+  };
+  /** Tippen auf Rückmeldung oder Tageslimit: erst nach `TAP_GUARD_MS` zurück zum Start. */
+  const tapToExit = () => {
+    if (now() - shownAt.current >= TAP_GUARD_MS) exit();
   };
   const exit = () => {
     alive.current = false;
@@ -108,6 +116,7 @@ export function TrainingScreen(props: {
           if (alive.current) exit();
         });
     } else if (state.kind === 'limit') {
+      shownAt.current = now();
       void announce([() => voice.say('greeting'), () => voice.say('dailyLimit')]);
     } else if (state.kind === 'intro') {
       void announce([() => voice.say('greeting'), () => voice.say('instruction')]).then(() => {
@@ -120,7 +129,8 @@ export function TrainingScreen(props: {
         const [sessions, trials] = await Promise.all([db.listSessions(), db.listTrials()]);
         const today = dayKey(new Date());
         const yesterday = previousDayKey(today);
-        const hadYesterday = sessions.some((s) => s.kind === 'training' && s.dayKey === yesterday);
+        // Wie beim Tageslimit: nur begonnene Trainingssitzungen (mindestens ein Durchgang)
+        const hadYesterday = sessions.some((s) => s.kind === 'training' && s.dayKey === yesterday && s.trialCount >= 1);
         return dailyFeedback(dayCounts(sessions, trials, today), hadYesterday ? dayCounts(sessions, trials, yesterday) : null);
       })().then(
         (feedback) => {
@@ -131,6 +141,7 @@ export function TrainingScreen(props: {
         },
       );
     } else if (state.kind === 'feedback') {
+      shownAt.current = now();
       const fb = state.feedback;
       void announce([
         () => voice.say('end'),
@@ -170,6 +181,12 @@ export function TrainingScreen(props: {
           // Nie in eine Ansage hinein: noch ausstehende Ansagen entfallen, die laufende wird abgewartet
           silence();
           await speech.current;
+          // Nie im falschen Fenster (Hochformat, Split View): Positionen wären falsch, Karte und Treppe würden verfälscht.
+          // Ein Fenster, das schon beim Start falsch ist, meldet die Bühne nicht (sie bricht nur bei einer Änderung ab).
+          if (!windowOk()) {
+            dispatch({ type: 'interrupted', nowMs: now() });
+            return;
+          }
           // Der Planer bleibt über Pausen hinweg derselbe; nur beim ersten Mal wird die Sitzung begonnen.
           training.current ??= await startTrainingSession({
             db,
@@ -251,7 +268,7 @@ export function TrainingScreen(props: {
 
   if (state.kind === 'limit') {
     return (
-      <div class="patient screen overlay-message" onClick={exit}>
+      <div class="patient screen overlay-message" onClick={tapToExit}>
         <div class="patient-right">
           <div class="message-card card">
             <p class="message-text">{textFor('dailyLimit', settings.announcements)}</p>
@@ -264,7 +281,7 @@ export function TrainingScreen(props: {
   if (state.kind === 'feedback') {
     const fb = state.feedback;
     return (
-      <div class="patient screen summary" onClick={exit}>
+      <div class="patient screen summary" onClick={tapToExit}>
         <div class="patient-right">
           <div class="message-card card">
             <p class="summary-lead">Heute gefunden</p>
