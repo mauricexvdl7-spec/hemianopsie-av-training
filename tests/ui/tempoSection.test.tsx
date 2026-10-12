@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 import { render } from 'preact';
 import { DEFAULT_TIMING } from '../../src/core/timing';
 import { openDb } from '../../src/store/db';
-import { ExportPage } from '../../src/ui/admin/ExportPage';
+import { TempoSection } from '../../src/ui/admin/TempoSection';
 
 let n = 0;
 const settle = () => new Promise((r) => setTimeout(r, 20));
@@ -25,7 +25,7 @@ describe('Abschnitt Tempo in der Verwaltung', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     let changed = 0;
-    render(<ExportPage db={db} onImported={() => undefined} onSettingsChanged={() => changed++} />, root);
+    render(<TempoSection db={db} onChanged={() => changed++} />, root);
     await until(() => root.textContent!.includes('Licht sichtbar'));
 
     expect(root.textContent).toContain('Licht sichtbar: 1,0 s');

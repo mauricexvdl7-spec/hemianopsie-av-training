@@ -9,6 +9,7 @@ import { openDb, type Db, type Settings } from '../store/db';
 import { AdminHome } from './admin/AdminHome';
 import { ExportPage } from './admin/ExportPage';
 import { PinScreen } from './admin/PinScreen';
+import { SettingsPage } from './admin/SettingsPage';
 import { TestPage } from './admin/TestPage';
 import { StartScreen } from './patient/StartScreen';
 import { TrainingScreen } from './patient/TrainingScreen';
@@ -95,12 +96,13 @@ export function App() {
         />
       );
     case 'admin':
-    // Seiten aus Task 9–12 folgen; bis dahin die Startseite des Bereichs
-    case 'settings':
+    // Seiten aus Task 10–12 folgen; bis dahin die Startseite des Bereichs
     case 'voice':
     case 'eval':
     case 'report':
       return <AdminHome db={db} voice={voice} onLeave={leaveAdmin} />;
+    case 'settings':
+      return <SettingsPage db={db} onChanged={() => void reload()} />;
     case 'setup':
       return (
         <SetupWizard
