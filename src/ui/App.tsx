@@ -10,6 +10,7 @@ import { AdminHome } from './admin/AdminHome';
 import { EvaluationPage } from './admin/EvaluationPage';
 import { ExportPage } from './admin/ExportPage';
 import { PinScreen } from './admin/PinScreen';
+import { ReportPage } from './admin/ReportPage';
 import { SettingsPage } from './admin/SettingsPage';
 import { TestPage } from './admin/TestPage';
 import { VoicePage } from './admin/VoicePage';
@@ -98,9 +99,9 @@ export function App() {
         />
       );
     case 'admin':
-    // Monatsbericht folgt (Task 12); bis dahin die Startseite des Bereichs
-    case 'report':
       return <AdminHome db={db} voice={voice} onLeave={leaveAdmin} />;
+    case 'report':
+      return <ReportPage db={db} />;
     case 'eval':
       return <EvaluationPage db={db} />;
     case 'voice':

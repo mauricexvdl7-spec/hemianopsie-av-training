@@ -746,3 +746,95 @@ input[type='file'] + .result-line {
   vertical-align: middle;
   border-radius: 2px;
 }
+
+/* Monatsbericht: Kennzahlen und Karten nebeneinander */
+.admin .report-facts {
+  margin: 8px 0 0;
+  padding-left: 22px;
+}
+
+.report-maps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+}
+
+.report-maps .card {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
+/* ---------- Druck (Monatsbericht): heller Hintergrund nur hier ---------- */
+
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  html,
+  body,
+  #app,
+  .screen,
+  .admin {
+    height: auto !important;
+    overflow: visible !important;
+    background: #f8f8f8 !important;
+    color: #1a1a1a !important;
+    animation: none !important;
+  }
+
+  .admin {
+    padding: 0;
+    font-size: 12pt;
+  }
+
+  .admin-inner {
+    max-width: none;
+  }
+
+  .admin .card {
+    animation: none !important;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0 0 12pt;
+    margin: 0;
+    color: #1a1a1a;
+  }
+
+  .admin .hint {
+    color: #3a3a3a;
+  }
+
+  /* Die Karten bleiben ungeteilt; Verläufe beginnen nicht mitten in einem Diagramm */
+  .admin .card,
+  .admin figure {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .report-curves {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+
+  .report-maps .card {
+    flex-basis: 45%;
+  }
+
+  /* Diagramme in voller Breite; die dunklen Flächen der Diagramme sollen mitgedruckt werden */
+  .admin figure,
+  .admin figure svg {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .admin svg {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
