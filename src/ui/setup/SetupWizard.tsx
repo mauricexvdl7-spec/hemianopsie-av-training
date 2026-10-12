@@ -1,15 +1,16 @@
-/** Einrichtungsassistent (Spec 11): Hinweis, Geometrie, Ton, Reaktionszeit. */
+/** Einrichtungsassistent (Spec 11): Hinweis, Geometrie, Ton, Reaktionszeit, PIN. */
 import { useEffect, useState } from 'preact/hooks';
 import type { AudioEngine } from '../../io/audio';
 import { DEFAULT_GEOMETRY, type Db, type Settings } from '../../store/db';
 import { AudioStep } from './steps/AudioStep';
 import { Disclaimer } from './steps/Disclaimer';
 import { GeometryStep } from './steps/GeometryStep';
+import { PinStep } from './steps/PinStep';
 import { ReferenceStep } from './steps/ReferenceStep';
 
-type Step = 'disclaimer' | 'geometry' | 'audio' | 'reference';
+export type SetupStep = 'disclaimer' | 'geometry' | 'audio' | 'reference' | 'pin';
 
-const STEPS: readonly Step[] = ['disclaimer', 'geometry', 'audio', 'reference'];
+export const SETUP_STEPS: readonly SetupStep[] = ['disclaimer', 'geometry', 'audio', 'reference', 'pin'];
 
 /** Schritt-Anzeige: „Schritt 2 von 4“ und Punkte (erledigt, aktuell, offen). */
 export function Stepper(props: { index: number; count: number }) {
@@ -29,7 +30,7 @@ export function Stepper(props: { index: number; count: number }) {
 
 export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void }) {
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [step, setStep] = useState<Step>('disclaimer');
+  const [step, setStep] = useState<SetupStep>('disclaimer');
 
   useEffect(() => {
     void props.db.getSettings().then(setSettings);
@@ -44,7 +45,7 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
       </div>
     );
 
-  const save = async (next: Settings, nextStep: Step | null) => {
+  const save = async (next: Settings, nextStep: SetupStep | null) => {
     await props.db.saveSettings(next);
     setSettings(next);
     if (nextStep) setStep(nextStep);
@@ -75,16 +76,18 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
             audio={props.audio}
             geometry={settings.geometry ?? DEFAULT_GEOMETRY}
             timing={settings.timing}
-            onNext={(r) => void save({ ...settings, ...r }, null)}
+            onNext={(r) => void save({ ...settings, ...r }, 'pin')}
           />
         );
+      case 'pin':
+        return <PinStep existing={settings.pin} onNext={(pin) => void save({ ...settings, pin }, null)} />;
     }
   })();
 
   return (
     <div class="admin screen">
       <div class="admin-inner">
-        <Stepper index={STEPS.indexOf(step)} count={STEPS.length} />
+        <Stepper index={SETUP_STEPS.indexOf(step)} count={SETUP_STEPS.length} />
         {body}
       </div>
     </div>

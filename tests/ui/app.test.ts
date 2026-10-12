@@ -5,24 +5,56 @@ import { sampleRecord } from '../helpers/plans';
 
 const ready = { ...DEFAULT_SETTINGS, disclaimerAcceptedAt: 'x', geometry: DEFAULT_GEOMETRY };
 
+const ADMIN_HASHES = ['#/admin', '#/admin/settings', '#/admin/voice', '#/admin/eval', '#/admin/report', '#/admin/export', '#/admin/test', '#/export', '#/test'];
+
 describe('resolveRoute', () => {
   it('ohne bestätigten Hinweis immer Einrichtung', () => {
-    for (const h of ['#/', '#/train', '#/export', '#/test', '']) {
-      expect(resolveRoute(h, { ...ready, disclaimerAcceptedAt: null })).toBe('setup');
+    for (const h of ['#/', '#/train', '#/setup', '', ...ADMIN_HASHES]) {
+      for (const unlocked of [false, true]) {
+        expect(resolveRoute(h, { ...ready, disclaimerAcceptedAt: null }, unlocked)).toBe('setup');
+      }
     }
   });
+
   it('ohne Geometrie Einrichtung, außer Export (Datenrettung)', () => {
-    expect(resolveRoute('#/train', { ...ready, geometry: null })).toBe('setup');
-    expect(resolveRoute('#/export', { ...ready, disclaimerAcceptedAt: 'x', geometry: null })).toBe('export');
+    expect(resolveRoute('#/train', { ...ready, geometry: null }, true)).toBe('setup');
+    expect(resolveRoute('#/', { ...ready, geometry: null }, false)).toBe('setup');
+    expect(resolveRoute('#/export', { ...ready, geometry: null }, true)).toBe('export');
+    expect(resolveRoute('#/admin/export', { ...ready, geometry: null }, true)).toBe('export');
   });
-  it('bekannte Routen', () => {
-    expect(resolveRoute('#/', ready)).toBe('start');
-    expect(resolveRoute('', ready)).toBe('start');
-    expect(resolveRoute('#/train', ready)).toBe('train');
-    expect(resolveRoute('#/setup', ready)).toBe('setup');
-    expect(resolveRoute('#/export', ready)).toBe('export');
-    expect(resolveRoute('#/test', ready)).toBe('test');
-    expect(resolveRoute('#/unbekannt', ready)).toBe('start');
+
+  it('Ersteinrichtung ohne Geometrie braucht keine PIN', () => {
+    expect(resolveRoute('#/setup', { ...ready, geometry: null }, false)).toBe('setup');
+  });
+
+  it('PIN-Bereich und Einrichtung gesperrt → PIN-Eingabe', () => {
+    for (const h of [...ADMIN_HASHES, '#/setup']) {
+      expect(resolveRoute(h, ready, false)).toBe('pin');
+    }
+  });
+
+  it('Start und Training ohne PIN', () => {
+    expect(resolveRoute('#/', ready, false)).toBe('start');
+    expect(resolveRoute('', ready, false)).toBe('start');
+    expect(resolveRoute('#/train', ready, false)).toBe('train');
+    expect(resolveRoute('#/unbekannt', ready, false)).toBe('start');
+  });
+
+  it('bekannte Routen (entsperrt)', () => {
+    expect(resolveRoute('#/', ready, true)).toBe('start');
+    expect(resolveRoute('', ready, true)).toBe('start');
+    expect(resolveRoute('#/train', ready, true)).toBe('train');
+    expect(resolveRoute('#/setup', ready, true)).toBe('setup');
+    expect(resolveRoute('#/admin', ready, true)).toBe('admin');
+    expect(resolveRoute('#/admin/settings', ready, true)).toBe('settings');
+    expect(resolveRoute('#/admin/voice', ready, true)).toBe('voice');
+    expect(resolveRoute('#/admin/eval', ready, true)).toBe('eval');
+    expect(resolveRoute('#/admin/report', ready, true)).toBe('report');
+    expect(resolveRoute('#/admin/export', ready, true)).toBe('export');
+    expect(resolveRoute('#/export', ready, true)).toBe('export');
+    expect(resolveRoute('#/admin/test', ready, true)).toBe('test');
+    expect(resolveRoute('#/test', ready, true)).toBe('test');
+    expect(resolveRoute('#/unbekannt', ready, true)).toBe('start');
   });
 });
 

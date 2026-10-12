@@ -1,4 +1,4 @@
-/** Export und Wiederherstellung (Stand M1 ohne PIN, nur über #/export erreichbar). */
+/** Export und Wiederherstellung im Bereich für Angehörige; Tempo der Lichter. */
 import { useEffect, useState } from 'preact/hooks';
 import { DEFAULT_TIMING, TIMING_LIMITS, clampTiming, type TimingSettings } from '../../core/timing';
 import type { Db } from '../../store/db';
@@ -113,19 +113,29 @@ function TempoSection(props: { db: Db; onChanged(): void }) {
 export function ExportPage(props: { db: Db; onImported(): void; onSettingsChanged?(): void }) {
   const [message, setMessage] = useState<string | null>(null);
   const [pending, setPending] = useState<{ bundle: unknown; sessions: number; trials: number } | null>(null);
-  const [ready, setReady] = useState<File | null>(null);
+  /** Fertige Datei zum Teilen; nur eine JSON-Sicherung zählt für die Erinnerung. */
+  const [ready, setReady] = useState<{ file: File; backup: boolean } | null>(null);
   const stamp = dayKey(new Date());
 
   // Zwei Schritte: erst Datei bauen (liest die Datenbank), dann im nächsten Tippen teilen
   const prepareJson = async () => {
     const bundle = await exportAll(props.db, new Date().toISOString());
-    setReady(new File([JSON.stringify(bundle, null, 1)], `sehtraining-${stamp}.json`, { type: 'application/json' }));
+    setReady({ file: new File([JSON.stringify(bundle, null, 1)], `sehtraining-${stamp}.json`, { type: 'application/json' }), backup: true });
   };
 
   const prepareCsv = async () => {
     const trials = await props.db.listTrials();
     trials.sort((a, b) => a.startedAtIso.localeCompare(b.startedAtIso) || a.index - b.index);
-    setReady(new File([trialsToCsv(trials)], `sehtraining-${stamp}.csv`, { type: 'text/csv' }));
+    setReady({ file: new File([trialsToCsv(trials)], `sehtraining-${stamp}.csv`, { type: 'text/csv' }), backup: false });
+  };
+
+  /** Teilen direkt aus dem Tippen; nach einer nicht abgebrochenen JSON-Sicherung den Zeitpunkt merken. */
+  const share = async (r: { file: File; backup: boolean }) => {
+    const shared = await shareOrDownload(r.file);
+    if (!shared || !r.backup) return;
+    const s = await props.db.getSettings();
+    await props.db.saveSettings({ ...s, lastExportAtIso: new Date().toISOString() });
+    props.onSettingsChanged?.();
   };
 
   const pickFile = async (file: File | undefined) => {
@@ -160,6 +170,9 @@ export function ExportPage(props: { db: Db; onImported(): void; onSettingsChange
   return (
     <div class="admin screen">
       <div class="admin-inner">
+        <div class="actions back">
+          <button onClick={() => (location.hash = '#/admin')}>Zurück</button>
+        </div>
         <section class="card">
           <h1>Daten sichern</h1>
           <p class="hint">
@@ -174,9 +187,9 @@ export function ExportPage(props: { db: Db; onImported(): void; onSettingsChange
           </div>
           {ready && (
             <div class="result-line">
-              Bereit: {ready.name}
+              Bereit: {ready.file.name}
               <div class="actions">
-                <button class="primary" onClick={() => void shareOrDownload(ready)}>
+                <button class="primary" onClick={() => void share(ready)}>
                   Teilen oder speichern
                 </button>
               </div>
@@ -202,15 +215,6 @@ export function ExportPage(props: { db: Db; onImported(): void; onSettingsChange
         </section>
 
         <TempoSection db={props.db} onChanged={() => props.onSettingsChanged?.()} />
-
-        <section class="card">
-          <h1>Weiteres</h1>
-          <div class="actions">
-            <button onClick={() => (location.hash = '#/setup')}>Einrichtung wiederholen</button>
-            <button onClick={() => (location.hash = '#/test')}>Testseite</button>
-            <button onClick={() => (location.hash = '#/')}>Zum Start</button>
-          </div>
-        </section>
       </div>
     </div>
   );

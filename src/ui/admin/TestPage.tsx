@@ -120,7 +120,7 @@ export function TestPage(props: { db: Db; audio: AudioEngine; settings: Settings
             >
               Reiz zeigen
             </button>
-            <button onClick={() => (location.hash = '#/export')}>Zurück</button>
+            <button onClick={() => (location.hash = '#/admin')}>Zurück</button>
           </div>
           {result && (
             <p class="result-line">

@@ -9,7 +9,7 @@ describe('StartScreen', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     const onStart = vi.fn();
-    render(<StartScreen onStart={onStart} />, root);
+    render(<StartScreen onStart={onStart} onAdmin={vi.fn()} />, root);
     const screen = root.querySelector('.start-screen')!;
     screen.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     expect(onStart).not.toHaveBeenCalled();
@@ -23,7 +23,7 @@ describe('StartScreen', () => {
     const root = document.createElement('div');
     document.body.appendChild(root);
     const onStart = vi.fn();
-    render(<StartScreen onStart={onStart} now={new Date(2026, 9, 11, 9, 30)} />, root);
+    render(<StartScreen onStart={onStart} onAdmin={vi.fn()} now={new Date(2026, 9, 11, 9, 30)} />, root);
     expect(root.querySelector('.start-greeting')!.textContent).toBe('Guten Morgen');
     expect(root.querySelector('.start-date')!.textContent).toBe('Sonntag, 11. Oktober');
     const button = root.querySelector<HTMLButtonElement>('button.start-button')!;

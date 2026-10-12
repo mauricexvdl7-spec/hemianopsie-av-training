@@ -1,9 +1,14 @@
-/** App-Gerüst: lädt Datenbank und Einstellungen, wählt den Bildschirm nach dem Hash. */
+/**
+ * App-Gerüst: lädt Datenbank und Einstellungen, wählt den Bildschirm nach dem Hash.
+ * Die Entsperrung des Bereichs für Angehörige lebt nur im Speicher: Zurück zum Start oder Neuladen sperrt wieder.
+ */
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AudioEngine, startupAudioSettings } from '../io/audio';
 import { createBrowserVoice } from '../io/voice';
 import { openDb, type Db, type Settings } from '../store/db';
+import { AdminHome } from './admin/AdminHome';
 import { ExportPage } from './admin/ExportPage';
+import { PinScreen } from './admin/PinScreen';
 import { TestPage } from './admin/TestPage';
 import { StartScreen } from './patient/StartScreen';
 import { TrainingScreen } from './patient/TrainingScreen';
@@ -18,7 +23,14 @@ export function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [hash, setHash] = useState(location.hash);
   const [training, setTraining] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const route = settings ? resolveRoute(hash, settings, unlocked) : null;
+
+  // Wer beim Start oder Training landet, hat den Bereich für Angehörige verlassen
+  useEffect(() => {
+    if (route === 'start' || route === 'train') setUnlocked(false);
+  }, [route]);
 
   useEffect(() => {
     openDb()
@@ -62,7 +74,33 @@ export function App() {
     );
   if (!db || !settings) return <div class="patient screen" />;
 
-  switch (resolveRoute(hash, settings)) {
+  const leaveAdmin = () => {
+    setUnlocked(false);
+    location.hash = '#/';
+  };
+
+  switch (resolveRoute(hash, settings, unlocked)) {
+    case 'pin':
+      return (
+        <PinScreen
+          db={db}
+          settings={settings}
+          onUnlocked={() => {
+            setUnlocked(true);
+            // eine eben angelegte PIN in die Einstellungen übernehmen
+            void reload();
+            if (location.hash === '' || location.hash === '#/') location.hash = '#/admin';
+          }}
+          onCancel={() => (location.hash = '#/')}
+        />
+      );
+    case 'admin':
+    // Seiten aus Task 9–12 folgen; bis dahin die Startseite des Bereichs
+    case 'settings':
+    case 'voice':
+    case 'eval':
+    case 'report':
+      return <AdminHome db={db} voice={voice} onLeave={leaveAdmin} />;
     case 'setup':
       return (
         <SetupWizard
@@ -85,6 +123,7 @@ export function App() {
       }
       return (
         <StartScreen
+          onAdmin={() => (location.hash = '#/admin')}
           onStart={() => {
             // Audio, Stimme und Bildschirmsperre nur innerhalb einer Berührung freischalten (iOS)
             unlockAudio(audio);

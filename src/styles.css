@@ -642,3 +642,79 @@ body {
 input[type='file'] + .result-line {
   margin-top: 16px;
 }
+
+/* ---------- Bereich für Angehörige ---------- */
+
+/* Unsichtbarer Zugang oben rechts im Startbildschirm (3 s halten) */
+.admin-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 64px;
+  height: 64px;
+  z-index: 1;
+  background: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Wege zu den Seiten als Kacheln */
+.admin-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.admin .card.admin-link {
+  display: block;
+  margin: 0;
+  padding: 22px 24px;
+  color: var(--text);
+  text-decoration: none;
+  transition: border-color 150ms;
+}
+
+.admin .card.admin-link:hover,
+.admin .card.admin-link:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.admin .card.admin-link h2 {
+  font-size: 22px;
+  margin: 0 0 6px;
+}
+
+/* Erinnerung und Warnung: Akzentkante statt Farbe im Text */
+.admin .card.notice {
+  border-left: 6px solid var(--accent-strong);
+}
+
+.admin .card.notice p {
+  margin-top: 0;
+}
+
+.disclaimer-footer {
+  font-size: 17px;
+  margin-top: 32px;
+}
+
+/* Zurück-Zeile oberhalb der ersten Karte */
+.actions.back {
+  margin: 0 0 12px;
+}
+
+/* PIN: verdeckt, große Ziffern */
+.admin input.pin-input {
+  width: 6.5em;
+  min-height: 56px;
+  margin-top: 8px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 28px;
+  letter-spacing: 0.3em;
+}

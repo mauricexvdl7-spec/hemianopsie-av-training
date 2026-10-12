@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render } from 'preact';
 import { DEFAULT_SETTINGS, openDb } from '../../src/store/db';
 import { EXPORT_SCHEMA, exportAll, previewBundle } from '../../src/store/exportData';
@@ -77,6 +77,58 @@ describe('Sicherung einspielen in der Verwaltung', () => {
     await until(() => root.textContent!.includes('Unbekanntes Format'));
     expect(root.textContent).toContain('Unbekanntes Format: Das ist keine Sicherung dieser App.');
     expect(root.textContent).not.toContain('vorhandene Daten werden ersetzt');
+    unmount();
+  });
+});
+
+describe('Zeitpunkt der letzten Sicherung', () => {
+  afterEach(() => {
+    delete (navigator as unknown as Record<string, unknown>).canShare;
+    delete (navigator as unknown as Record<string, unknown>).share;
+  });
+
+  /** Teilen-Menü vortäuschen; reject = abgebrochen. */
+  function fakeShare(result: 'ok' | 'abort') {
+    const share = vi.fn(async () => {
+      if (result === 'abort') throw new DOMException('abgebrochen', 'AbortError');
+    });
+    Object.defineProperty(navigator, 'canShare', { value: () => true, configurable: true });
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+    return share;
+  }
+
+  async function shareFile(root: Element, prepare: string, ext: string) {
+    button(root, prepare).click();
+    await until(() => root.textContent!.includes(`${ext}Teilen`));
+    button(root, 'Teilen oder speichern').click();
+    await settle();
+  }
+
+  it('nach geteilter JSON-Sicherung gesetzt', async () => {
+    const share = fakeShare('ok');
+    const { db, root, unmount } = await mount();
+    await shareFile(root, 'Alles sichern (JSON)', '.json');
+    await until(() => share.mock.calls.length > 0);
+    let last: string | null = null;
+    for (let i = 0; i < 50 && !last; i++, await settle()) last = (await db.getSettings()).lastExportAtIso;
+    expect(last).not.toBeNull();
+    expect(Math.abs(Date.parse(last!) - Date.now())).toBeLessThan(60_000);
+    unmount();
+  });
+
+  it('nicht gesetzt bei abgebrochenem Teilen oder CSV', async () => {
+    const share = fakeShare('abort');
+    const { db, root, unmount } = await mount();
+    await shareFile(root, 'Alles sichern (JSON)', '.json');
+    await until(() => share.mock.calls.length > 0);
+    await settle();
+    expect((await db.getSettings()).lastExportAtIso).toBeNull();
+    const shareCsv = fakeShare('ok');
+    await shareFile(root, 'Durchgänge als Tabelle (CSV)', '.csv');
+    await until(() => shareCsv.mock.calls.length > 0);
+    await settle();
+    expect(shareCsv).toHaveBeenCalledTimes(1);
+    expect((await db.getSettings()).lastExportAtIso).toBeNull();
     unmount();
   });
 });
