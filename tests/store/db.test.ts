@@ -4,6 +4,7 @@ import { DEFAULT_TIMING } from '../../src/core/timing';
 import { openDb, DEFAULT_SETTINGS, type MapSnapshot, type SessionRecord } from '../../src/store/db';
 import { makeGeometry } from '../../src/core/geometry';
 import { createControllerState } from '../../src/core/controller';
+import { DEFAULT_GRID } from '../../src/core/blocks';
 import { sampleRecord } from '../helpers/plans';
 
 let n = 0;
@@ -175,5 +176,107 @@ describe('Controller-Zustand und Karten-Snapshots', () => {
     const [s] = await db.listSessions();
     expect(s!.summary).toBeNull();
     expect(s!.stage).toBeNull();
+  });
+});
+
+describe('Aufnahmen', () => {
+  const rec = (key: 'greeting' | 'end', bytes: number[], createdAtIso = 'a') => ({
+    key,
+    mimeType: 'audio/mp4',
+    data: new Uint8Array(bytes).buffer,
+    createdAtIso,
+  });
+
+  it('leere DB hat keine Aufnahmen', async () => {
+    expect(await (await freshDb()).listRecordings()).toEqual([]);
+  });
+
+  it('ArrayBuffer wird mit gleichen Bytes zurückgelesen', async () => {
+    const db = await freshDb();
+    await db.saveRecording(rec('greeting', [1, 2, 3]));
+    const [r] = await db.listRecordings();
+    expect(r!.key).toBe('greeting');
+    expect(r!.mimeType).toBe('audio/mp4');
+    expect(Array.from(new Uint8Array(r!.data))).toEqual([1, 2, 3]);
+  });
+
+  it('saveRecording mit gleichem key ersetzt den Eintrag', async () => {
+    const db = await freshDb();
+    await db.saveRecording(rec('greeting', [1, 2, 3]));
+    await db.saveRecording(rec('greeting', [7, 8], 'b'));
+    const list = await db.listRecordings();
+    expect(list).toHaveLength(1);
+    expect(Array.from(new Uint8Array(list[0]!.data))).toEqual([7, 8]);
+    expect(list[0]!.createdAtIso).toBe('b');
+  });
+
+  it('deleteRecording entfernt nur den Schlüssel', async () => {
+    const db = await freshDb();
+    await db.saveRecording(rec('greeting', [1]));
+    await db.saveRecording(rec('end', [2]));
+    await db.deleteRecording('greeting');
+    expect((await db.listRecordings()).map((r) => r.key)).toEqual(['end']);
+  });
+
+  it('replaceAll lässt Aufnahmen stehen, clearAll entfernt sie', async () => {
+    const db = await freshDb();
+    await db.saveRecording(rec('greeting', [1, 2, 3]));
+    await db.replaceAll({ settings: DEFAULT_SETTINGS, sessions: [], trials: [], controller: null, mapSnapshots: [] });
+    expect(await db.listRecordings()).toHaveLength(1);
+    await db.clearAll();
+    expect(await db.listRecordings()).toEqual([]);
+  });
+});
+
+describe('Settings M3', () => {
+  it('Standardwerte', () => {
+    expect(DEFAULT_SETTINGS.pin).toBeNull();
+    expect(DEFAULT_SETTINGS.sessionMinutes).toBe(30);
+    expect(DEFAULT_SETTINGS.announcements).toEqual({});
+    expect(DEFAULT_SETTINGS.lastExportAtIso).toBeNull();
+    expect(DEFAULT_SETTINGS.grid).toEqual(DEFAULT_GRID);
+  });
+
+  it('alte Einstellungen ohne die neuen Felder bekommen Standardwerte', async () => {
+    const db = await freshDb();
+    const { pin: _p, sessionMinutes: _m, announcements: _a, lastExportAtIso: _l, grid: _g, ...old } = DEFAULT_SETTINGS;
+    await db.saveSettings(old as typeof DEFAULT_SETTINGS);
+    expect(await db.getSettings()).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('gespeichertes sessionMinutes 45 wird zu 30', async () => {
+    const db = await freshDb();
+    await db.saveSettings({ ...DEFAULT_SETTINGS, sessionMinutes: 45 });
+    expect((await db.getSettings()).sessionMinutes).toBe(30);
+    await db.saveSettings({ ...DEFAULT_SETTINGS, sessionMinutes: 15 });
+    expect((await db.getSettings()).sessionMinutes).toBe(15);
+  });
+
+  it('teilweises Raster wird je Feld mit Standard aufgefüllt und begrenzt', async () => {
+    const db = await freshDb();
+    await db.saveSettings({ ...DEFAULT_SETTINGS, grid: { eccStartDeg: 1 } as typeof DEFAULT_GRID });
+    expect((await db.getSettings()).grid).toEqual({ ...DEFAULT_GRID, eccStartDeg: 2 });
+  });
+
+  it('PIN, Ansagetexte und Export-Zeitpunkt bleiben erhalten', async () => {
+    const db = await freshDb();
+    const s = {
+      ...DEFAULT_SETTINGS,
+      pin: { saltHex: 'aa', hashHex: 'bb' },
+      announcements: { greeting: 'Hallo Opa' },
+      lastExportAtIso: '2026-10-01T10:00:00.000Z',
+    };
+    await db.saveSettings(s);
+    expect(await db.getSettings()).toEqual(s);
+  });
+});
+
+describe('MapSnapshot.guess', () => {
+  it('wird verlustfrei gespeichert', async () => {
+    const db = await freshDb();
+    const guess = { falseAlarms: 2, catchTrials: 9 };
+    await db.addMapSnapshot({ ...snapshot('s1'), guess });
+    const [m] = await db.listMapSnapshots();
+    expect(m!.guess).toEqual(guess);
   });
 });

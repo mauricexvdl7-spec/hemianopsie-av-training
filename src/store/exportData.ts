@@ -1,7 +1,7 @@
 /** Export als JSON (vollständig) und CSV (Durchgänge), Import zur Wiederherstellung (Spec 12). */
 import type { TrialRecord } from '../core/types';
 import type { ControllerState } from '../core/controller';
-import type { Db, MapSnapshot, SessionRecord, Settings } from './db';
+import { normalizeSettings, type Db, type MapSnapshot, type SessionRecord, type Settings } from './db';
 
 export const EXPORT_SCHEMA = 'sehtraining-export/2';
 /** Sicherungen der ersten Version werden weiterhin gelesen. */
@@ -21,7 +21,8 @@ export async function exportAll(db: Db, nowIso: string): Promise<ExportBundle> {
   return {
     schema: EXPORT_SCHEMA,
     exportedAtIso: nowIso,
-    settings: await db.getSettings(),
+    // Ein 4-stelliger Hash ist in Sekunden zu knacken und gehört nicht in eine Datei für den Arzt.
+    settings: { ...(await db.getSettings()), pin: null },
     sessions: await db.listSessions(),
     trials: await db.listTrials(),
     controller: await db.getController(),
@@ -64,11 +65,15 @@ export function previewBundle(bundle: unknown): { sessions: number; trials: numb
   return data ? { sessions: data.sessions.length, trials: data.trials.length } : null;
 }
 
-/** Ersetzt alle vorhandenen Daten durch den Inhalt der Sicherung – atomar: bei einem Fehler bleibt alles beim Alten. */
+/**
+ * Ersetzt alle vorhandenen Daten durch den Inhalt der Sicherung – atomar: bei einem Fehler bleibt alles beim Alten.
+ * PIN und Aufnahmen bleiben die des Geräts; fehlende Einstellungsfelder älterer Sicherungen bekommen Standardwerte.
+ */
 export async function importAll(db: Db, bundle: unknown): Promise<{ sessions: number; trials: number }> {
   const data = parseBundle(bundle);
   if (!data) throw new Error('Unbekanntes Format: Das ist keine Sicherung dieser App.');
-  await db.replaceAll(data);
+  const { pin } = await db.getSettings();
+  await db.replaceAll({ ...data, settings: { ...normalizeSettings(data.settings), pin } });
   return { sessions: data.sessions.length, trials: data.trials.length };
 }
 
@@ -107,17 +112,18 @@ export function trialsToCsv(trials: TrialRecord[]): string {
 
 /**
  * Teilen-Menü (iPad: AirDrop, Mail, Dateien), sonst normaler Download.
+ * Liefert false nur, wenn das Teilen-Menü abgebrochen wurde, sonst true.
  * Direkt aus dem Tipp-Handler aufrufen, ohne vorheriges await: Safari verlangt eine frische Nutzergeste.
  */
-export async function shareOrDownload(file: File): Promise<void> {
+export async function shareOrDownload(file: File): Promise<boolean> {
   const filename = file.name;
   const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
   if (nav.canShare?.({ files: [file] })) {
     try {
       await nav.share({ files: [file], title: filename });
-      return;
+      return true;
     } catch (e) {
-      if ((e as DOMException).name === 'AbortError') return;
+      if ((e as DOMException).name === 'AbortError') return false;
     }
   }
   const url = URL.createObjectURL(file);
@@ -128,4 +134,5 @@ export async function shareOrDownload(file: File): Promise<void> {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return true;
 }

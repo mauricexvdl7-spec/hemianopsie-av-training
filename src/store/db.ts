@@ -1,15 +1,25 @@
 /** Lokale Speicherung in IndexedDB (Spec 12). Nichts verlässt das Gerät. */
 import { openDB, type IDBPDatabase } from 'idb';
+import { DEFAULT_GRID, clampGrid, type GridConfig } from '../core/blocks';
 import type { ControllerState } from '../core/controller';
 import type { GeometryInput } from '../core/geometry';
+import type { GuessRateState } from '../core/guessRate';
 import type { MapState } from '../core/map';
 import type { SessionSummary, Stage } from '../core/phases';
+import { SESSION_MINUTES_DEFAULT, clampSessionMinutes } from '../core/schedule';
 import { DEFAULT_TIMING, clampTiming, type TimingSettings } from '../core/timing';
 import type { TrialRecord } from '../core/types';
 import type { AudioSettings } from '../io/audio';
+import type { AnnouncementKey } from '../io/voice';
 
 export const DB_NAME = 'sehtraining';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
+
+/** Gesalzener SHA-256-Hash der 4-stelligen PIN (nur auf dem Gerät, nie im Export). */
+export interface PinRecord {
+  saltHex: string;
+  hashHex: string;
+}
 
 export interface Settings {
   disclaimerAcceptedAt: string | null;
@@ -21,6 +31,16 @@ export interface Settings {
   setupViewport: { width: number; height: number } | null;
   /** Tempo (Licht, Pause, Zeit zum Tippen); bei alten Einstellungen fehlend (beim Lesen Standard). */
   timing: TimingSettings;
+  /** PIN für den Erwachsenenbereich; null = noch keine gesetzt. Nie Teil des Exports. */
+  pin: PinRecord | null;
+  /** Sitzungsdauer in Minuten (10–30, 5er-Schritte); bei alten Einstellungen fehlend (beim Lesen 30). */
+  sessionMinutes: number;
+  /** Eigene Ansagetexte; fehlende Schlüssel nutzen den Standardtext. */
+  announcements: Partial<Record<AnnouncementKey, string>>;
+  /** Zeitpunkt des letzten JSON-Exports (für die Erinnerung). */
+  lastExportAtIso: string | null;
+  /** Raster der Messpunkte; bei alten Einstellungen fehlend (beim Lesen Standard). */
+  grid: GridConfig;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -31,7 +51,27 @@ export const DEFAULT_SETTINGS: Settings = {
   responseWindowMs: null,
   setupViewport: null,
   timing: DEFAULT_TIMING,
+  pin: null,
+  sessionMinutes: SESSION_MINUTES_DEFAULT,
+  announcements: {},
+  lastExportAtIso: null,
+  grid: DEFAULT_GRID,
 };
+
+/** Füllt fehlende Felder mit Standardwerten (je Feld, auch in `timing` und `grid`) und begrenzt Werte. */
+export function normalizeSettings(s: Partial<Settings> | undefined): Settings {
+  if (!s) return structuredClone(DEFAULT_SETTINGS);
+  return {
+    ...structuredClone(DEFAULT_SETTINGS),
+    ...s,
+    timing: clampTiming(s.timing ?? {}),
+    sessionMinutes: clampSessionMinutes(s.sessionMinutes),
+    grid: clampGrid(s.grid),
+    announcements: { ...(s.announcements ?? {}) },
+    pin: s.pin ?? null,
+    lastExportAtIso: s.lastExportAtIso ?? null,
+  };
+}
 
 /** Startwerte für die Geometrie im Einrichtungsassistenten. */
 export const DEFAULT_GEOMETRY: GeometryInput = {
@@ -65,6 +105,16 @@ export interface MapSnapshot {
   map: MapState;
   stage: Stage;
   reason: 'sessionEnd' | 'gridChanged';
+  /** Rate-Wahrscheinlichkeit zum Zeitpunkt der Momentaufnahme; bei älteren Datensätzen fehlend. */
+  guess?: GuessRateState;
+}
+
+/** Eigene Sprachaufnahme für eine Ansage (je Schlüssel höchstens eine); `ArrayBuffer`, kein `Blob`. */
+export interface RecordingRecord {
+  key: AnnouncementKey;
+  mimeType: string;
+  data: ArrayBuffer;
+  createdAtIso: string;
 }
 
 /** Alles, was `replaceAll` atomar ersetzt. */
@@ -88,13 +138,19 @@ export interface Db {
   saveController(s: ControllerState): Promise<void>;
   addMapSnapshot(s: MapSnapshot): Promise<void>;
   listMapSnapshots(): Promise<MapSnapshot[]>;
+  listRecordings(): Promise<RecordingRecord[]>;
+  /** Überschreibt eine vorhandene Aufnahme mit gleichem Schlüssel. */
+  saveRecording(r: RecordingRecord): Promise<void>;
+  deleteRecording(key: AnnouncementKey): Promise<void>;
+  /** Leert alles, auch die Aufnahmen. */
   clearAll(): Promise<void>;
-  /** Ersetzt alle Daten in einer einzigen Transaktion: entweder alles oder nichts. */
+  /** Ersetzt alle Daten außer den Aufnahmen in einer einzigen Transaktion: entweder alles oder nichts. */
   replaceAll(data: DbContents): Promise<void>;
 }
 
 const SETTINGS_KEY = 'main';
 const CONTROLLER_KEY = 'main';
+/** Speicher, die `replaceAll` ersetzt (ohne `recordings`: Aufnahmen gehören dem Gerät). */
 const STORES = ['settings', 'sessions', 'trials', 'controller', 'mapSnapshots'] as const;
 
 /** Füllt Felder, die es in Version 1 noch nicht gab, mit null. */
@@ -113,13 +169,17 @@ export async function openDb(name: string = DB_NAME): Promise<Db> {
         db.createObjectStore('controller');
         db.createObjectStore('mapSnapshots', { keyPath: 'id' });
       }
+      // Version 3: Aufnahmen; Einstellungen werden beim Lesen mit Standardwerten ergänzt.
+      if (oldVersion < 3) {
+        db.createObjectStore('recordings', { keyPath: 'key' });
+      }
     },
   });
 
   return {
     async getSettings() {
-      const s = (await idb.get('settings', SETTINGS_KEY)) as Settings | undefined;
-      return s ? { ...DEFAULT_SETTINGS, ...s, timing: clampTiming(s.timing ?? {}) } : structuredClone(DEFAULT_SETTINGS);
+      const s = (await idb.get('settings', SETTINGS_KEY)) as Partial<Settings> | undefined;
+      return normalizeSettings(s);
     },
     async saveSettings(s) {
       await idb.put('settings', s, SETTINGS_KEY);
@@ -152,9 +212,18 @@ export async function openDb(name: string = DB_NAME): Promise<Db> {
     async listMapSnapshots() {
       return (await idb.getAll('mapSnapshots')) as MapSnapshot[];
     },
+    async listRecordings() {
+      return (await idb.getAll('recordings')) as RecordingRecord[];
+    },
+    async saveRecording(r) {
+      await idb.put('recordings', r);
+    },
+    async deleteRecording(key) {
+      await idb.delete('recordings', key);
+    },
     async clearAll() {
-      const tx = idb.transaction([...STORES], 'readwrite');
-      await Promise.all([...STORES.map((n) => tx.objectStore(n).clear()), tx.done]);
+      const tx = idb.transaction([...STORES, 'recordings'], 'readwrite');
+      await Promise.all([...STORES.map((n) => tx.objectStore(n).clear()), tx.objectStore('recordings').clear(), tx.done]);
     },
     async replaceAll(data) {
       const tx = idb.transaction([...STORES], 'readwrite');

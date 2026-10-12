@@ -1,9 +1,10 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { openDb, DEFAULT_SETTINGS, type MapSnapshot, type SessionRecord } from '../../src/store/db';
 import { makeGeometry } from '../../src/core/geometry';
 import { createControllerState } from '../../src/core/controller';
-import { exportAll, importAll, trialsToCsv, EXPORT_SCHEMA, CSV_COLUMNS } from '../../src/store/exportData';
+import { exportAll, importAll, shareOrDownload, trialsToCsv, EXPORT_SCHEMA, CSV_COLUMNS } from '../../src/store/exportData';
+import { DEFAULT_GRID } from '../../src/core/blocks';
 import { sampleRecord } from '../helpers/plans';
 
 let n = 0;
@@ -158,6 +159,116 @@ describe('Export und Import', () => {
     const db = await freshDb();
     await expect(importAll(db, { schema: 'x' })).rejects.toThrow(/Format/);
     await expect(importAll(db, null)).rejects.toThrow(/Format/);
+  });
+});
+
+describe('Export und Import: PIN und Aufnahmen (Schema v3 der Datenbank)', () => {
+  const devicePin = { saltHex: 'aa', hashHex: 'bb' };
+
+  it('exportAll setzt die PIN auf null, das Gerät behält sie', async () => {
+    const db = await freshDb();
+    await db.saveSettings({ ...DEFAULT_SETTINGS, pin: devicePin, sessionMinutes: 20 });
+    const bundle = await exportAll(db, '2026-10-11T12:00:00.000Z');
+    expect(bundle.settings.pin).toBeNull();
+    expect(bundle.settings.sessionMinutes).toBe(20);
+    expect((await db.getSettings()).pin).toEqual(devicePin);
+    expect(bundle.schema).toBe('sehtraining-export/2');
+  });
+
+  it('importAll behält die PIN des Geräts, auch wenn die Sicherung eine andere enthält', async () => {
+    const db = await freshDb();
+    await db.saveSettings({ ...DEFAULT_SETTINGS, pin: devicePin });
+    const bundle = {
+      schema: EXPORT_SCHEMA,
+      exportedAtIso: 'x',
+      settings: { ...DEFAULT_SETTINGS, pin: { saltHex: 'cc', hashHex: 'dd' }, sessionMinutes: 15 },
+      sessions: [],
+      trials: [],
+      controller: null,
+      mapSnapshots: [],
+    };
+    await importAll(db, bundle);
+    const s = await db.getSettings();
+    expect(s.pin).toEqual(devicePin);
+    expect(s.sessionMinutes).toBe(15);
+  });
+
+  it('Gerät ohne PIN bleibt ohne PIN', async () => {
+    const db = await freshDb();
+    const bundle = {
+      schema: EXPORT_SCHEMA,
+      exportedAtIso: 'x',
+      settings: { ...DEFAULT_SETTINGS, pin: devicePin },
+      sessions: [],
+      trials: [],
+      controller: null,
+      mapSnapshots: [],
+    };
+    await importAll(db, bundle);
+    expect((await db.getSettings()).pin).toBeNull();
+  });
+
+  it('Sicherung der Version 1 und 2 ohne neue Felder: Standardwerte, PIN des Geräts', async () => {
+    const { pin: _p, sessionMinutes: _m, announcements: _a, lastExportAtIso: _l, grid: _g, ...oldSettings } = DEFAULT_SETTINGS;
+    const v2 = { schema: EXPORT_SCHEMA, exportedAtIso: 'x', settings: oldSettings, sessions: [], trials: [], controller: null, mapSnapshots: [] };
+    const v1 = { schema: 'sehtraining-export/1', exportedAtIso: 'x', settings: oldSettings, sessions: [], trials: [] };
+    for (const bundle of [v1, v2]) {
+      const db = await freshDb();
+      await db.saveSettings({ ...DEFAULT_SETTINGS, pin: devicePin });
+      await importAll(db, bundle);
+      const s = await db.getSettings();
+      expect(s).toEqual({ ...DEFAULT_SETTINGS, pin: devicePin });
+      expect(s.grid).toEqual(DEFAULT_GRID);
+    }
+  });
+
+  it('Import lässt Aufnahmen des Geräts unberührt', async () => {
+    const db = await freshDb();
+    await db.saveRecording({ key: 'greeting', mimeType: 'audio/mp4', data: new Uint8Array([1, 2, 3]).buffer, createdAtIso: 'a' });
+    const bundle = { schema: EXPORT_SCHEMA, exportedAtIso: 'x', settings: DEFAULT_SETTINGS, sessions: [], trials: [], controller: null, mapSnapshots: [] };
+    await importAll(db, bundle);
+    const [r] = await db.listRecordings();
+    expect(Array.from(new Uint8Array(r!.data))).toEqual([1, 2, 3]);
+  });
+
+  it('Sicherung enthält keine Aufnahmen', async () => {
+    const db = await freshDb();
+    await db.saveRecording({ key: 'greeting', mimeType: 'audio/mp4', data: new Uint8Array([1]).buffer, createdAtIso: 'a' });
+    expect(Object.keys(await exportAll(db, 'x'))).not.toContain('recordings');
+  });
+
+  it('Karten-Momentaufnahme mit guess übersteht Export und Import', async () => {
+    const a = await freshDb();
+    await a.addMapSnapshot({ ...snap('s1'), guess: { falseAlarms: 1, catchTrials: 5 } });
+    const b = await freshDb();
+    await importAll(b, JSON.parse(JSON.stringify(await exportAll(a, 'x'))));
+    expect((await b.listMapSnapshots())[0]!.guess).toEqual({ falseAlarms: 1, catchTrials: 5 });
+  });
+});
+
+describe('shareOrDownload', () => {
+  const file = new File(['x'], 'a.json', { type: 'application/json' });
+
+  it('true nach erfolgreichem Teilen, false nur bei AbortError', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { canShare: () => true, share });
+    expect(await shareOrDownload(file)).toBe(true);
+    share.mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'AbortError' }));
+    expect(await shareOrDownload(file)).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('true nach Download (Teilen nicht verfügbar)', async () => {
+    const click = vi.fn();
+    const anchor = { click, remove: vi.fn(), href: '', download: '' };
+    vi.stubGlobal('navigator', {});
+    vi.stubGlobal('document', { createElement: () => anchor, body: { appendChild: vi.fn() } });
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:x');
+    expect(await shareOrDownload(file)).toBe(true);
+    expect(click).toHaveBeenCalled();
+    expect(anchor.download).toBe('a.json');
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 });
 
