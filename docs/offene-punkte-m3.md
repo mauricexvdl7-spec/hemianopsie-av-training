@@ -13,7 +13,6 @@ Kleinere Funde aus den Prüfungen von Meilenstein 3, bewusst zurückgestellt. Al
 - Sitzung über Mitternacht: Rückmeldung nimmt den Endtag, Sitzungen zählen zum Starttag („Heute 0 von 0“ möglich).
 - Eine Sitzung, deren einziger Durchgang abgebrochen wurde, zählt für das Tageslimit (entspricht dem Wortlaut der Spec).
 - Fehler beim Lesen der Datenbank am Sitzungsende führen still zum Startbildschirm zurück.
-- Fenster wechselt mitten in einer Ansage nach der Pause: bereits behoben; Unterbrechung ohne Ansage („Pause“ ohne Ton) ist gewollt.
 - Import übernimmt `lastExportAtIso` aus der Sicherung (ältere Sicherung → Erinnerung früher).
 - Einstellungen: keine Fehlermeldung, wenn Speichern fehlschlägt; Lade-Logik des Controllers doppelt.
 - Monatsbericht: Fehlertext bleibt nach Monatswechsel stehen.
