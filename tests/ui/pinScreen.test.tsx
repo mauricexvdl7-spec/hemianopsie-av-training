@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import 'fake-indexeddb/auto';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render } from 'preact';
 import { DEFAULT_GEOMETRY, DEFAULT_SETTINGS, openDb, type Settings } from '../../src/store/db';
 import { createPinRecord, verifyPin } from '../../src/ui/admin/pin';
@@ -36,6 +36,8 @@ async function mount(pin: string | null) {
   return { db, root, inputs, onUnlocked, onCancel, unmount: () => (render(null, root), root.remove()) };
 }
 
+afterEach(() => vi.restoreAllMocks());
+
 describe('PinScreen mit gespeicherter PIN', () => {
   it('richtige PIN entsperrt', async () => {
     const { root, inputs, onUnlocked, unmount } = await mount('2468');
@@ -59,6 +61,23 @@ describe('PinScreen mit gespeicherter PIN', () => {
     await until(() => root.textContent!.includes('Falsche PIN.'));
     expect(root.textContent).toContain('Falsche PIN.');
     expect(onUnlocked).not.toHaveBeenCalled();
+    unmount();
+  });
+
+  it('scheitert die Prüfung: Hinweis, „Öffnen“ wieder frei, nicht entsperrt', async () => {
+    const { root, inputs, onUnlocked, unmount } = await mount('2468');
+    vi.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(new Error('kein crypto.subtle'));
+    type(inputs()[0]!, '2468');
+    await settle();
+    button(root, 'Öffnen').click();
+    await until(() => root.textContent!.includes('Die PIN konnte nicht geprüft werden.'));
+    expect(root.textContent).toContain('Die PIN konnte nicht geprüft werden.');
+    await settle();
+    expect(button(root, 'Öffnen').disabled).toBe(false);
+    expect(onUnlocked).not.toHaveBeenCalled();
+    button(root, 'Öffnen').click();
+    await until(() => onUnlocked.mock.calls.length > 0);
+    expect(onUnlocked).toHaveBeenCalledTimes(1);
     unmount();
   });
 

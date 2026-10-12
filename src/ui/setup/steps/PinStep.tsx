@@ -24,18 +24,33 @@ export function PinInput(props: { label: string; value: string; onInput(v: strin
   );
 }
 
-/** Zwei Felder; „PIN speichern“ nur bei gültiger und gleicher PIN. Bei vorhandener PIN zusätzlich „PIN behalten“. */
-export function PinStep(props: { existing: PinRecord | null; onNext(pin: PinRecord): void }) {
+/**
+ * Zwei Felder; „PIN speichern“ nur bei gültiger und gleicher PIN. Bei vorhandener PIN zusätzlich „PIN behalten“.
+ * onNext darf ein Promise liefern (Speichern); scheitert Hashen oder Speichern, gibt es einen Hinweis und einen neuen Versuch.
+ */
+export function PinStep(props: { existing: PinRecord | null; onNext(pin: PinRecord): void | Promise<void> }) {
   const [pin, setPin] = useState('');
   const [repeat, setRepeat] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const canSave = isValidPin(pin) && pin === repeat && !busy;
 
-  const save = async () => {
-    if (!canSave) return;
+  const submit = async (make: () => Promise<PinRecord>) => {
     setBusy(true);
-    props.onNext(await createPinRecord(pin));
+    setError(null);
+    try {
+      await props.onNext(await make());
+    } catch {
+      setError('Die PIN konnte nicht gespeichert werden.');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const save = () => {
+    if (canSave) void submit(() => createPinRecord(pin));
+  };
+  const keep = (existing: PinRecord) => void submit(() => Promise.resolve(existing));
 
   return (
     <section class="card">
@@ -48,12 +63,13 @@ export function PinStep(props: { existing: PinRecord | null; onNext(pin: PinReco
       <PinInput label="Neue PIN (4 Ziffern)" value={pin} onInput={setPin} />
       <PinInput label="PIN wiederholen" value={repeat} onInput={setRepeat} />
       {repeat.length === 4 && isValidPin(pin) && pin !== repeat && <p class="error">Die beiden Eingaben sind verschieden.</p>}
+      {error && <p class="error">{error}</p>}
       <div class="actions">
-        <button class="primary" disabled={!canSave} onClick={() => void save()}>
+        <button class="primary" disabled={!canSave} onClick={save}>
           PIN speichern
         </button>
         {props.existing && (
-          <button disabled={busy} onClick={() => props.existing && props.onNext(props.existing)}>
+          <button disabled={busy} onClick={() => props.existing && keep(props.existing)}>
             PIN behalten
           </button>
         )}

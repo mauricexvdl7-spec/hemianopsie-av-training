@@ -21,6 +21,13 @@ describe('resolveRoute', () => {
     expect(resolveRoute('#/', { ...ready, geometry: null }, false)).toBe('setup');
     expect(resolveRoute('#/export', { ...ready, geometry: null }, true)).toBe('export');
     expect(resolveRoute('#/admin/export', { ...ready, geometry: null }, true)).toBe('export');
+    expect(resolveRoute('#/admin', { ...ready, geometry: null }, true)).toBe('setup');
+  });
+
+  it('PIN-Bereich braucht die PIN auch ohne Geometrie (z. B. nach Einspielen einer Sicherung)', () => {
+    expect(resolveRoute('#/export', { ...ready, geometry: null }, false)).toBe('pin');
+    expect(resolveRoute('#/admin/export', { ...ready, geometry: null }, false)).toBe('pin');
+    for (const h of ADMIN_HASHES) expect(resolveRoute(h, { ...ready, geometry: null }, false)).toBe('pin');
   });
 
   it('Ersteinrichtung ohne Geometrie braucht keine PIN', () => {

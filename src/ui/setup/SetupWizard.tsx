@@ -80,7 +80,7 @@ export function SetupWizard(props: { db: Db; audio: AudioEngine; onDone(): void 
           />
         );
       case 'pin':
-        return <PinStep existing={settings.pin} onNext={(pin) => void save({ ...settings, pin }, null)} />;
+        return <PinStep existing={settings.pin} onNext={(pin) => save({ ...settings, pin }, null)} />;
     }
   })();
 

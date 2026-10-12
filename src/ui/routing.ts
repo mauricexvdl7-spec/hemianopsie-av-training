@@ -19,18 +19,19 @@ const ROUTES: Record<string, Route> = {
   '#/test': 'test',
 };
 
-/** Routen, die nur nach PIN-Eingabe erreichbar sind (Einrichtung erst, wenn eine Geometrie existiert). */
-const PROTECTED: ReadonlySet<Route> = new Set<Route>(['admin', 'settings', 'voice', 'eval', 'report', 'export', 'test', 'setup']);
+/** Routen des Bereichs für Angehörige: immer nur nach PIN-Eingabe erreichbar, auch ohne Geometrie. */
+const ADMIN_ROUTES: ReadonlySet<Route> = new Set<Route>(['admin', 'settings', 'voice', 'eval', 'report', 'export', 'test']);
 
 /**
- * Ohne bestätigten Hinweis gibt es keine Nutzung; der PIN-Bereich und eine wiederholte Einrichtung brauchen die PIN;
- * ohne Geometrie kein Training (Export bleibt zur Datenrettung erreichbar).
+ * Ohne bestätigten Hinweis gibt es keine Nutzung. Der PIN-Bereich braucht immer die PIN, die Einrichtung nur, wenn schon
+ * eine Geometrie existiert (Ersteinrichtung ohne PIN). Ohne Geometrie kein Training; der Export bleibt nach PIN-Eingabe
+ * zur Datenrettung erreichbar (ohne gespeicherte PIN wird dort zuerst eine festgelegt).
  * unlocked: PIN in dieser App-Sitzung eingegeben.
  */
 export function resolveRoute(hash: string, s: Settings, unlocked: boolean): Route {
   if (!s.disclaimerAcceptedAt) return 'setup';
   const r = ROUTES[hash] ?? 'start';
-  if (s.geometry && PROTECTED.has(r) && !unlocked) return 'pin';
+  if (!unlocked && (ADMIN_ROUTES.has(r) || (r === 'setup' && s.geometry))) return 'pin';
   if (!s.geometry && r !== 'export') return 'setup';
   return r;
 }

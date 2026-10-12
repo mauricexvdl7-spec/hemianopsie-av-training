@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render } from 'preact';
 import { SETUP_STEPS, Stepper } from '../../src/ui/setup/SetupWizard';
 import { PinStep } from '../../src/ui/setup/steps/PinStep';
@@ -41,6 +41,45 @@ describe('Stepper', () => {
 });
 
 describe('PinStep', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  async function fillAndSave(root: Element, pin: string) {
+    const inputs = [...root.querySelectorAll<HTMLInputElement>('input')];
+    type(inputs[0]!, pin);
+    type(inputs[1]!, pin);
+    await settle();
+    button(root, 'PIN speichern')!.click();
+  }
+
+  it('scheitert das Hashen: Hinweis, Knopf wieder frei, neuer Versuch klappt', async () => {
+    const { root, unmount } = mountRoot();
+    const onNext = vi.fn();
+    const digest = vi.spyOn(crypto.subtle, 'digest').mockRejectedValueOnce(new Error('kein crypto.subtle'));
+    render(<PinStep existing={null} onNext={onNext} />, root);
+    await fillAndSave(root, '4321');
+    await until(() => root.textContent!.includes('Die PIN konnte nicht gespeichert werden.'));
+    expect(root.textContent).toContain('Die PIN konnte nicht gespeichert werden.');
+    expect(onNext).not.toHaveBeenCalled();
+    expect(button(root, 'PIN speichern')!.disabled).toBe(false);
+    expect(digest).toHaveBeenCalled();
+    button(root, 'PIN speichern')!.click();
+    await until(() => onNext.mock.calls.length > 0);
+    expect(await verifyPin('4321', onNext.mock.calls[0]![0])).toBe(true);
+    unmount();
+  });
+
+  it('scheitert das Speichern (onNext lehnt ab): Hinweis und Knopf wieder frei', async () => {
+    const { root, unmount } = mountRoot();
+    const onNext = vi.fn(() => Promise.reject(new Error('Speicher voll')));
+    render(<PinStep existing={null} onNext={onNext} />, root);
+    await fillAndSave(root, '4321');
+    await until(() => root.textContent!.includes('Die PIN konnte nicht gespeichert werden.'));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    await settle();
+    expect(button(root, 'PIN speichern')!.disabled).toBe(false);
+    unmount();
+  });
+
   it('„PIN speichern“ nur bei gültiger und gleicher PIN, ohne vorhandene PIN kein „PIN behalten“', async () => {
     const { root, unmount } = mountRoot();
     const onNext = vi.fn();

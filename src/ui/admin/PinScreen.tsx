@@ -31,8 +31,15 @@ function PinEntry(props: { pin: PinRecord; onUnlocked(): void; onCancel(): void 
       return;
     }
     setBusy(true);
-    const ok = await verifyPin(value, props.pin);
-    setBusy(false);
+    let ok: boolean;
+    try {
+      ok = await verifyPin(value, props.pin);
+    } catch {
+      setError('Die PIN konnte nicht geprüft werden.');
+      return;
+    } finally {
+      setBusy(false);
+    }
     if (ok) {
       props.onUnlocked();
     } else {
@@ -75,26 +82,17 @@ function PinEntry(props: { pin: PinRecord; onUnlocked(): void; onCancel(): void 
 }
 
 function PinCreate(props: { db: Db; onUnlocked(): void; onCancel(): void }) {
-  const [error, setError] = useState<string | null>(null);
-  // neuer Schlüssel nach einem Fehler: Felder leeren und Knopf wieder freigeben
-  const [attempt, setAttempt] = useState(0);
-
+  // Fehler beim Speichern zeigt PinStep selbst an und erlaubt einen neuen Versuch
   const save = async (pin: PinRecord) => {
-    try {
-      // frisch lesen, damit nichts überschrieben wird, was sich inzwischen geändert hat
-      const s = await props.db.getSettings();
-      await props.db.saveSettings({ ...s, pin });
-      props.onUnlocked();
-    } catch {
-      setError('Die PIN konnte nicht gespeichert werden.');
-      setAttempt((a) => a + 1);
-    }
+    // frisch lesen, damit nichts überschrieben wird, was sich inzwischen geändert hat
+    const s = await props.db.getSettings();
+    await props.db.saveSettings({ ...s, pin });
+    props.onUnlocked();
   };
 
   return (
     <>
-      <PinStep key={attempt} existing={null} onNext={(pin) => void save(pin)} />
-      {error && <p class="error">{error}</p>}
+      <PinStep existing={null} onNext={save} />
       <div class="actions">
         <button onClick={() => props.onCancel()}>Abbrechen</button>
       </div>
