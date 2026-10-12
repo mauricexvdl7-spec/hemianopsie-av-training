@@ -15,6 +15,7 @@ import type { Db, Settings } from '../../store/db';
 import { planningGeometry } from '../browserDeps';
 import { dayKey, newId, startTrainingSession, type TrainingSession } from '../session';
 import { TrialStage } from '../TrialStage';
+import { FixationScreen } from './FixationScreen';
 import { unlockAudio } from '../unlockAudio';
 import { viewportMatches } from '../validate';
 import { dailyFeedback, dayCounts, previousDayKey } from './dailyFeedback';
@@ -307,6 +308,9 @@ export function TrainingScreen(props: {
     );
   }
 
-  // checking, intro, ending: leerer Patientenbildschirm
+  // Begrüßung und Anleitung: schon das Kreuz zeigen („Schau auf das Kreuz …“)
+  if (state.kind === 'intro') return <FixationScreen geometry={geometry} />;
+
+  // checking, ending: leerer Patientenbildschirm (nur kurz, solange gelesen bzw. gespeichert wird)
   return <div class="patient screen" />;
 }

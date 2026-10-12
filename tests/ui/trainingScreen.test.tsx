@@ -32,6 +32,11 @@ vi.mock('../../src/ui/TrialStage', async () => {
   };
 });
 
+vi.mock('../../src/ui/patient/FixationScreen', () => ({
+  // Ersatz ohne Canvas: nur eine Markierung, dass das Kreuz gezeigt wird
+  FixationScreen: () => <div data-testid="fixation" />,
+}));
+
 vi.mock('../../src/ui/session', async (orig) => ({
   ...(await orig<typeof import('../../src/ui/session')>()),
   startTrainingSession: vi.fn(async (args: Record<string, unknown>) => {
@@ -264,6 +269,12 @@ describe('TrainingScreen', () => {
     expect(args.geometry.viewportHeightPx).toBe(820);
     expect(args.grid).toBe(baseSettings.grid);
     expect(args.trials).toBeUndefined();
+  });
+
+  it('während Begrüßung und Anleitung steht schon das Kreuz (kein leerer grauer Bildschirm)', async () => {
+    await mount({ voice: fakeVoice({ instruction: 9000 }).voice });
+    expect(runs()).toBe(0);
+    expect(root.querySelector('[data-testid="fixation"]')).not.toBeNull();
   });
 
   it('hängende Stimme: der erste Lauf beginnt erst, wenn die Anleitung sich erfüllt hat', async () => {

@@ -4,6 +4,7 @@ import {
   ANNOUNCEMENT_KEYS,
   DEFAULT_ANNOUNCEMENTS,
   SPEECH_RATE,
+  SPEECH_START_TIMEOUT_MS,
   Voice,
   pickGermanVoice,
   speechTimeoutMs,
@@ -52,16 +53,25 @@ describe('Texte', () => {
   });
 });
 
-type Utt = { text: string; lang: string; rate: number; voice: unknown; onend: (() => void) | null; onerror: (() => void) | null };
+type Utt = {
+  text: string;
+  lang: string;
+  rate: number;
+  voice: unknown;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onerror: (() => void) | null;
+};
 
-function setup(opts: { hang?: boolean; voices?: ReturnType<typeof voice>[]; synth?: null; playClip?: VoiceDeps['playClip'] } = {}) {
+function setup(opts: { hang?: boolean; noStart?: boolean; voices?: ReturnType<typeof voice>[]; synth?: null; playClip?: VoiceDeps['playClip'] } = {}) {
   const spoken: Utt[] = [];
   const listeners = new Set<() => void>();
   const synth: SpeechLike = {
     speak: vi.fn((u: SpeechSynthesisUtterance) => {
       const x = u as unknown as Utt;
       spoken.push(x);
-      if (!opts.hang) queueMicrotask(() => x.onend?.());
+      if (!opts.noStart) queueMicrotask(() => x.onstart?.());
+      if (!opts.hang && !opts.noStart) queueMicrotask(() => x.onend?.());
     }),
     cancel: vi.fn(),
     getVoices: () => (opts.voices ?? [voice('Anna', 'de-DE', true)]) as unknown as SpeechSynthesisVoice[],
@@ -71,7 +81,7 @@ function setup(opts: { hang?: boolean; voices?: ReturnType<typeof voice>[]; synt
   const playClip = vi.fn(opts.playClip ?? (async () => undefined));
   const deps: VoiceDeps = {
     synth: opts.synth === null ? null : synth,
-    makeUtterance: (text) => ({ text, lang: '', rate: 1, voice: null, onend: null, onerror: null }) as unknown as SpeechSynthesisUtterance,
+    makeUtterance: (text) => ({ text, lang: '', rate: 1, voice: null, onstart: null, onend: null, onerror: null }) as unknown as SpeechSynthesisUtterance,
     playClip,
     setTimeout: (cb, ms) => setTimeout(cb, ms),
     clearTimeout: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
@@ -147,6 +157,28 @@ describe('Voice', () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(done).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('Stimme beginnt nie (kein onstart): erfüllt sich nach SPEECH_START_TIMEOUT_MS und leert die Warteschlange', async () => {
+    const { v, synth } = setup({ noStart: true });
+    expect(SPEECH_START_TIMEOUT_MS).toBe(2500);
+    let done = false;
+    void v.say('instruction').then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(SPEECH_START_TIMEOUT_MS - 1);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done).toBe(true);
+    expect(synth.cancel).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('hat die Stimme begonnen, gilt weiter die lange Zeitgrenze', async () => {
+    const { v, synth } = setup({ hang: true });
+    let done = false;
+    void v.say('instruction').then(() => (done = true));
+    await vi.advanceTimersByTimeAsync(SPEECH_START_TIMEOUT_MS + 100);
+    expect(done).toBe(false);
+    expect(synth.cancel).not.toHaveBeenCalled();
   });
 
   it('onerror beendet die Ansage ebenfalls, und der Zeitgeber wird gelöscht', async () => {

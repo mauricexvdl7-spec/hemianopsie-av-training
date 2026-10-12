@@ -24,6 +24,9 @@ export const SPEECH_RATE = 0.9;
 const CLIP_GRACE_MS = 2000;
 
 /** Zeitgrenze einer gesprochenen Ansage (iOS feuert `end` nicht immer). */
+/** Beginnt die Stimme so lange nicht zu sprechen (kein `start`), gilt sie als hängend (z. B. Chrome-Warteschlange, keine Stimme). */
+export const SPEECH_START_TIMEOUT_MS = 2500;
+
 export function speechTimeoutMs(text: string): number {
   return 3000 + 120 * text.length;
 }
@@ -154,10 +157,12 @@ export class Voice {
     return new Promise<void>((resolve) => {
       let settled = false;
       let timer: unknown;
+      let startTimer: unknown;
       const finish = () => {
         if (settled) return;
         settled = true;
         if (timer !== undefined) this.deps.clearTimeout(timer);
+        if (startTimer !== undefined) this.deps.clearTimeout(startTimer);
         resolve();
       };
       try {
@@ -166,9 +171,24 @@ export class Voice {
         u.rate = SPEECH_RATE;
         const pick = this.german();
         if (pick) u.voice = pick.voice;
+        u.onstart = () => {
+          if (startTimer !== undefined) this.deps.clearTimeout(startTimer);
+          startTimer = undefined;
+        };
         u.onend = finish;
         u.onerror = finish;
         timer = this.deps.setTimeout(finish, speechTimeoutMs(text));
+        // Hängende Sprachausgabe nicht lange abwarten: Warteschlange leeren und weiter (er sitzt sonst vor einem leeren Bildschirm)
+        startTimer = this.deps.setTimeout(() => {
+          startTimer = undefined;
+          if (settled) return;
+          try {
+            synth.cancel();
+          } catch {
+            // nichts zu tun
+          }
+          finish();
+        }, SPEECH_START_TIMEOUT_MS);
         synth.speak(u);
       } catch {
         finish();
