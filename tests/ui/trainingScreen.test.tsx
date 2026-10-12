@@ -82,8 +82,12 @@ function fakeVoice(hang: Partial<Record<AnnouncementKey, number>> = {}) {
   return { voice: voice as unknown as Voice, cancel };
 }
 
-function fakeDb(sessions: SessionRecord[] = [], trials: TrialRecord[] = []): Db {
-  return { listSessions: async () => sessions, listTrials: async () => trials } as unknown as Db;
+/** `listTrials` filtert wie die echte Datenbank nach Sitzung (Index) und protokolliert die Aufrufe. */
+function fakeDb(sessions: SessionRecord[] = [], trials: TrialRecord[] = []) {
+  const listTrials = vi.fn(async (sessionId?: string) =>
+    sessionId === undefined ? trials : trials.filter((t) => t.sessionId === sessionId),
+  );
+  return Object.assign({ listSessions: async () => sessions, listTrials } as unknown as Db, { listTrials });
 }
 
 const TODAY = '2026-10-12';
@@ -186,6 +190,12 @@ describe('TrainingScreen', () => {
     await flush(1000);
     await tap();
     expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  it('Tageslimit: Hinweis, wie es zurückgeht', async () => {
+    await mount({ db: fakeDb([session('a', TODAY), session('b', TODAY)]) });
+    const hint = root.querySelector('.message-hint');
+    expect(hint?.textContent).toBe('Tippe, um zurückzugehen.');
   });
 
   it('Tageslimit: Tippen in der ersten Sekunde (Doppeltipp) verlässt den Hinweis nicht', async () => {
@@ -316,6 +326,21 @@ describe('TrainingScreen', () => {
     expect(exit).toHaveBeenCalledTimes(1);
   });
 
+  it('Sitzungsende lädt nur die Durchgänge der Sitzungen von heute und gestern, nie alle', async () => {
+    const other: SessionRecord = { ...session('test', TODAY), kind: 'reference' };
+    const db = fakeDb(
+      [session('heute', TODAY), session('gestern', YESTERDAY), session('alt', '2026-10-01'), other],
+      [...leftTrials('heute', 5, 8), ...leftTrials('gestern', 4, 9), ...leftTrials('alt', 9, 9), ...leftTrials('test', 7, 7)],
+    );
+    await mount({ db });
+    await tap(finishButton());
+    expect(root.textContent).toContain('5 von 8');
+    expect(root.textContent).toContain('Gestern waren es 4.');
+    expect(db.listTrials).toHaveBeenCalled();
+    for (const call of db.listTrials.mock.calls) expect(call[0]).toBeDefined();
+    expect(db.listTrials.mock.calls.map((c) => c[0]).sort()).toEqual(['gestern', 'heute']);
+  });
+
   it('Rückmeldung: Tippen in der ersten Sekunde (Doppeltipp auf „Fertig für heute“) verlässt sie nicht', async () => {
     const exit = vi.fn();
     await mount({ db: fakeDb([session('heute', TODAY)], leftTrials('heute', 2, 3)), onExit: exit });
@@ -357,6 +382,32 @@ describe('TrainingScreen', () => {
     expect(root.textContent).toContain('Heute gefunden');
     expect(root.textContent).not.toContain('Pause');
     expect(says().filter((s) => s === 'say:pauseStart')).toHaveLength(1);
+  });
+
+  it('geplante Pause, Fenster beim Weitermachen falsch: nach dem Drehen läuft ein voller neuer Abschnitt', async () => {
+    // „Weitermachen“ hängt 5 s; in der Zeit wird gedreht, der Lauf scheitert an der Fensterprüfung
+    await mount({ voice: fakeVoice({ pauseReady: 5000 }).voice });
+    expect(fake.activeMs).toBe(300_000);
+    await flush(30_000);
+    expect(says()).toContain('say:pauseReady');
+    await tap();
+    await act(async () => {
+      setWindow(820, 1180);
+      window.dispatchEvent(new Event('resize'));
+    });
+    await flush(5000);
+    expect(runs()).toBe(1);
+    expect(root.textContent).toContain('Bitte das iPad quer halten.');
+
+    await act(async () => {
+      setWindow(1180, 820);
+      window.dispatchEvent(new Event('resize'));
+    });
+    await tap();
+    // Durchgänge laufen, keine sofortige zweite Pause
+    expect(runs()).toBe(2);
+    expect(fake.activeMs).toBe(600_000);
+    expect(root.textContent).toContain('Kurze Pause');
   });
 
   it('Unterbrechung: „Pause“, Tippen geht sofort weiter', async () => {

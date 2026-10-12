@@ -96,6 +96,8 @@ export function App() {
             if (location.hash === '' || location.hash === '#/') location.hash = '#/admin';
           }}
           onCancel={() => (location.hash = '#/')}
+          // gelöschte PIN übernehmen, sonst fragte die Eingabe nach Abbrechen wieder nach der alten
+          onPinCleared={() => void reload()}
         />
       );
     case 'admin':

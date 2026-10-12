@@ -12,7 +12,7 @@ export const NO_GERMAN_VOICE_TEXT =
 const LINKS: ReadonlyArray<{ href: string; title: string; text: string }> = [
   { href: '#/admin/eval', title: 'Auswertung', text: 'Karte, Verlauf und Kennzahlen' },
   { href: '#/admin/report', title: 'Monatsbericht', text: 'Zum Ausdrucken für die Ärztin oder den Arzt' },
-  { href: '#/admin/settings', title: 'Einstellungen', text: 'Sitzungsdauer, Tempo, Ton und PIN' },
+  { href: '#/admin/settings', title: 'Einstellungen', text: 'Sitzungsdauer, Tempo, Raster, Phase, Vergessen' },
   { href: '#/admin/voice', title: 'Ansagen', text: 'Texte ändern, eigene Aufnahmen machen' },
   { href: '#/admin/export', title: 'Export und Sicherung', text: 'Daten sichern, als Tabelle teilen, einspielen' },
   { href: '#/admin/test', title: 'Testseite', text: 'Einzelne Lichter zeigen, Simulation' },

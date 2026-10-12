@@ -12,7 +12,7 @@ export type SetupStep = 'disclaimer' | 'geometry' | 'audio' | 'reference' | 'pin
 
 export const SETUP_STEPS: readonly SetupStep[] = ['disclaimer', 'geometry', 'audio', 'reference', 'pin'];
 
-/** Schritt-Anzeige: „Schritt 2 von 4“ und Punkte (erledigt, aktuell, offen). */
+/** Schritt-Anzeige: „Schritt 2 von 5“ und Punkte (erledigt, aktuell, offen). */
 export function Stepper(props: { index: number; count: number }) {
   return (
     <div class="stepper">

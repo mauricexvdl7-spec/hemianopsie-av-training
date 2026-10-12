@@ -418,6 +418,16 @@ body {
   cursor: default;
 }
 
+/* Kleiner Knopf in Link-Optik (z. B. „PIN vergessen?“) */
+.admin button.link {
+  min-height: 44px;
+  padding: 8px 0;
+  border: none;
+  font-size: 18px;
+  font-weight: 450;
+  text-decoration: underline;
+}
+
 .admin button:focus-visible,
 .admin input:focus-visible,
 .admin select:focus-visible {

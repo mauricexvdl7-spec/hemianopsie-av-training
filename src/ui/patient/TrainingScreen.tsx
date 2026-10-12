@@ -126,9 +126,12 @@ export function TrainingScreen(props: {
       void (async () => {
         if (training.current) await training.current.finish();
         training.current = null;
-        const [sessions, trials] = await Promise.all([db.listSessions(), db.listTrials()]);
+        const sessions = await db.listSessions();
         const today = dayKey(new Date());
         const yesterday = previousDayKey(today);
+        // Nur die Durchgänge der Trainingssitzungen von heute und gestern laden (Index), nie alle gespeicherten
+        const ids = sessions.filter((s) => s.kind === 'training' && (s.dayKey === today || s.dayKey === yesterday)).map((s) => s.id);
+        const trials = (await Promise.all(ids.map((id) => db.listTrials(id)))).flat();
         // Wie beim Tageslimit: nur begonnene Trainingssitzungen (mindestens ein Durchgang)
         const hadYesterday = sessions.some((s) => s.kind === 'training' && s.dayKey === yesterday && s.trialCount >= 1);
         return dailyFeedback(dayCounts(sessions, trials, today), hadYesterday ? dayCounts(sessions, trials, yesterday) : null);
@@ -184,6 +187,8 @@ export function TrainingScreen(props: {
           // Nie im falschen Fenster (Hochformat, Split View): Positionen wären falsch, Karte und Treppe würden verfälscht.
           // Ein Fenster, das schon beim Start falsch ist, meldet die Bühne nicht (sie bricht nur bei einer Änderung ab).
           if (!windowOk()) {
+            // Sollte hier ein neuer Abschnitt beginnen, beginnt er jetzt; sonst führte das nächste Weitermachen sofort in die Pause
+            if (newSegment && training.current) segStart.current = training.current.activeMs();
             dispatch({ type: 'interrupted', nowMs: now() });
             return;
           }
@@ -272,6 +277,7 @@ export function TrainingScreen(props: {
         <div class="patient-right">
           <div class="message-card card">
             <p class="message-text">{textFor('dailyLimit', settings.announcements)}</p>
+            <p class="message-hint">Tippe, um zurückzugehen.</p>
           </div>
         </div>
       </div>

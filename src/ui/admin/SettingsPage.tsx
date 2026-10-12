@@ -192,6 +192,7 @@ function ForgetSection(props: { db: Db; onChanged(): void }) {
   const [controller, setController] = useState<ControllerState | null | undefined>(undefined);
   const [value, setValue] = useState('');
   const [note, setNote] = useState<string | null>(null);
+  const [invalid, setInvalid] = useState(false);
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -213,9 +214,16 @@ function ForgetSection(props: { db: Db; onChanged(): void }) {
     );
 
   const save = async () => {
+    // Leeres Feld ergäbe Number('') = 0 und würde stillschweigend auf die Untergrenze geklemmt
+    const halfLife = value.trim() === '' ? NaN : Number(value);
+    if (!Number.isFinite(halfLife)) {
+      setNote(null);
+      setInvalid(true);
+      return;
+    }
     const fresh = await loadOrCreateController(props.db, await props.db.getSettings());
     if (!fresh) return;
-    const saved = withHalfLife(fresh, Number(value));
+    const saved = withHalfLife(fresh, halfLife);
     await props.db.saveController(saved);
     setController(saved);
     setValue(String(saved.halfLifeSessions));
@@ -234,9 +242,14 @@ function ForgetSection(props: { db: Db; onChanged(): void }) {
           max={HALF_LIFE_LIMITS.max}
           step={1}
           value={value}
-          onInput={(e) => (setNote(null), setValue(e.currentTarget.value))}
+          onInput={(e) => (setNote(null), setInvalid(false), setValue(e.currentTarget.value))}
         />
       </label>
+      {invalid && (
+        <p class="error">
+          Bitte eine Zahl von {HALF_LIFE_LIMITS.min} bis {HALF_LIFE_LIMITS.max} eingeben.
+        </p>
+      )}
       <p class="hint">Nach dieser Zahl von Sitzungen zählt ein älterer Messwert nur noch halb so viel.</p>
       <div class="actions">
         <button class="primary" onClick={() => void save()}>

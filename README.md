@@ -18,7 +18,7 @@ Updates kommen automatisch, wenn das iPad beim Start Internet hat.
 
 - **Helligkeit:** Einstellungen → Anzeige & Helligkeit: „True Tone“ aus, „Automatisch“ (unter Bedienungshilfen → Anzeige & Textgröße) aus, Helligkeit fest auf einen mittleren Wert. Sonst ändern sich die Reizstärken von Tag zu Tag.
 - **Lautstärke:** etwa auf die Hälfte. Die App begrenzt ihre eigene Lautstärke zusätzlich.
-- **Nach einem Update (Pegel neu abgestimmt):** Die Tonpegel der App wurden neu abgestimmt, bei gleicher Einstellung ist der Ton jetzt etwa 11 dB lauter. Deshalb nach dem Update den Einrichtungsschritt „Ton“ (`#/setup`) wiederholen und eine angenehme Lautstärke einstellen.
+- **Nach einem Update (Pegel neu abgestimmt):** Die Tonpegel der App wurden neu abgestimmt, bei gleicher Einstellung ist der Ton jetzt etwa 11 dB lauter. Deshalb nach dem Update den Einrichtungsschritt „Ton“ wiederholen und eine angenehme Lautstärke einstellen. Die Einrichtung (`#/setup`) braucht jetzt die PIN: Du erreichst sie im Bereich für Angehörige über „Einrichtung wiederholen“ (siehe unten). Ein iPad, das vor Meilenstein 3 eingerichtet wurde, hat noch keine PIN. Dann fragt die App zuerst nach einer neuen PIN.
 - **Halterung:** das iPad quer in eine stabile Halterung, immer im gleichen Abstand zu den Augen (Standard 30 cm). Den Abstand gibst du bei der Einrichtung ein.
 - **Geführter Zugriff:** Einstellungen → Bedienungshilfen → Geführter Zugriff einschalten. In der App dreimal die Seitentaste drücken, dann kann er die App nicht versehentlich verlassen.
 
@@ -40,11 +40,17 @@ Beim ersten Start öffnet sich der Einrichtungsassistent. Er hat 5 Schritte. Sp�
 
 **Takt.** Eine Sitzung dauert standardmäßig 30 Minuten. Alle 5 Minuten gibt es eine kurze Pause. Es zählt nur die Zeit, in der Lichter laufen. Pausen und Ansagen zählen nicht. Die Pause dauert mindestens 30 Sekunden. Ein Balken zeigt, wie lange es noch dauert. Danach sagt die App: „Wenn du weitermachen willst, tippe auf den Bildschirm.“ Vorher wirkt Tippen nicht. Wird die App verlassen oder das iPad gedreht, pausiert das Training ebenfalls. Dann geht es sofort mit einem Tippen weiter, ohne 30 Sekunden Wartezeit. Karte und Treppe verlieren dabei nichts.
 
-**Fertig für heute.** In jeder Pause gibt es unten den Knopf „Fertig für heute“. Er beendet die Sitzung sofort. Sie gilt wie jede andere.
+**Fertig für heute.** In jeder Pause gibt es unten den Knopf „Fertig für heute“. Er beendet die Sitzung sofort. Sie zählt für das Tageslimit. Für den Wechsel der Phase zählt sie nur, wenn sie mindestens 10 Minuten aktive Zeit hatte.
 
 **Tageslimit.** Es sind höchstens 2 Sitzungen pro Kalendertag möglich. Danach sagt die App: „Für heute ist genug, morgen geht es weiter.“ Eine Sitzung zählt, sobald mindestens ein Durchgang gemacht wurde.
 
-**Tagesrückmeldung.** Am Ende zeigt und spricht die App: „Gut gemacht. Die Übung ist zu Ende.“ und „Heute X von Y gefunden.“ Danach folgt „Gestern waren es Z.“, wenn gestern trainiert wurde und heute mindestens so viel gefunden wurde. Sonst folgt „Schön, dass du dabei warst.“ „Gestern“ ist der Kalendertag davor. Tippen führt zurück zum Start.
+**Tagesrückmeldung.** Am Ende spricht die App nacheinander:
+
+1. „Gut gemacht. Die Übung ist zu Ende.“
+2. „Heute X von Y gefunden.“ Y ist die Zahl der Lichter links in allen Sitzungen des Tages (ohne abgebrochene Durchgänge), X die Zahl der davon gefundenen.
+3. „Gestern waren es Z.“, wenn gestern trainiert wurde und heute mindestens so viel gefunden wurde. Sonst „Schön, dass du dabei warst.“ „Gestern“ ist der Kalendertag davor.
+
+Auf dem Bildschirm stehen „Heute gefunden“, groß „X von Y“, darunter ein Balken für den Anteil und der dritte Satz („Gestern waren es Z.“ oder „Schön, dass du dabei warst.“). Tippen führt zurück zum Start.
 
 **Lautstärke.** Etwa halb. Die App begrenzt ihre eigene Lautstärke zusätzlich.
 
@@ -54,7 +60,9 @@ Die Texte der Ansagen kannst du ändern oder durch eigene Aufnahmen ersetzen (si
 
 **Zugang.** Auf dem Startbildschirm die Ecke oben rechts 3 Sekunden lang gedrückt halten. Die Fläche ist unsichtbar und etwa 64 × 64 Punkte groß. Dann die 4-stellige PIN eingeben. Bei falscher PIN erscheint „Falsche PIN.“ und du kannst es neu versuchen. Es gibt keine Sperre. Der Bereich sperrt sich wieder, wenn du „Zurück zum Training“ wählst oder die App neu lädst.
 
-**Die PIN aufschreiben.** Ohne PIN gibt es keinen Zugang zu Einstellungen, Auswertung und Export. Die PIN steht nicht in der Sicherung. Hast du sie vergessen, hilft nur, die App vom iPad zu löschen. Dann sind alle Daten weg.
+**Die PIN aufschreiben.** Ohne PIN gibt es keinen Zugang zu Einstellungen, Auswertung und Export. Die PIN steht nicht in der Sicherung.
+
+**PIN vergessen?** Unter der PIN-Eingabe steht der Knopf „PIN vergessen?“. Er löscht nur die PIN, alle Trainingsdaten bleiben erhalten. Zum Bestätigen tippst du ZURÜCKSETZEN ein und wählst „PIN löschen“. Danach legst du gleich eine neue PIN fest.
 
 Auch die alten Direktadressen `#/export` und `#/test` fragen jetzt nach der PIN.
 
@@ -72,7 +80,7 @@ Auf der Startseite des Bereichs stehen der Hinweis „kein Medizinprodukt“, di
 - **Auswertung:** Siehe „Auswertung lesen“ unten.
 - **Monatsbericht:** Eine Seite pro Monat mit Sitzungen, Übungszeit, Phase am Monatsende, Karte am Anfang und Ende und den Verläufen. Mit „Vormonat“ und „Folgemonat“ wechselst du den Monat. „Drucken oder als PDF sichern“ öffnet den Druckdialog. Im Teilen-Menü (Teilen-Symbol im Druckdialog) kannst du ein PDF sichern oder verschicken. Der Bericht trägt den Hinweis „kein Medizinprodukt“.
 - **Export und Sicherung:** siehe „Datenexport“ unten.
-- **Testseite:** einzelne Lichter mit wählbarer Stufe, Ort und Ton ansehen, außerdem Karte und Simulation (siehe unten).
+- **Testseite:** einzelne Lichter mit wählbarer Stufe, Ort und Ton ansehen. Der Abschnitt *Karte* zeigt den gespeicherten Stand, wahlweise als Trefferwahrscheinlichkeit bei Stufe 6 oder als Schwelle. Unter *Simulation* durchläuft ein simulierter Proband fünf Sitzungen. Schätzung und wahre Karte erscheinen nebeneinander, dazu der mittlere Schwellenfehler. Die Testseite verändert die Karte nie und die Simulation schreibt nichts in die Datenbank.
 
 **Deutsche Stimme auf dem iPad laden.** Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Deutsch. Dort eine Stimme laden. Fehlt eine deutsche Stimme, weist die App im Bereich für Angehörige darauf hin. Dann bleibt nur, eigene Aufnahmen zu machen.
 
@@ -105,8 +113,6 @@ Die Seite **Export und Sicherung** erreichst du im Bereich für Angehörige (mit
 **Erinnerung.** Auf der Startseite des Bereichs erscheint „Bitte die Daten sichern“, wenn es Trainingssitzungen gibt und noch nie gesichert wurde oder die letzte JSON-Sicherung mindestens 30 Tage zurückliegt.
 
 **Nicht in der Sicherung:** die PIN und die eigenen Aufnahmen. Ein 4-stelliger Code ließe sich in Sekunden knacken und gehört nicht in eine Datei für die Ärztin oder den Arzt. Beim Einspielen bleiben PIN und Aufnahmen des iPads erhalten. Auf einem neuen iPad musst du eine neue PIN festlegen und die Aufnahmen neu machen.
-
-Die **Testseite** zeigt einzelne Reize mit wählbarer Stufe, Ort und Ton. Der Abschnitt **Karte** zeigt den gespeicherten Stand, wahlweise als Trefferwahrscheinlichkeit bei Stufe 6 oder als Schwelle. Unter **Simulation** durchläuft ein simulierter Proband fünf Sitzungen. Schätzung und wahre Karte erscheinen nebeneinander, dazu der mittlere Schwellenfehler. Die Testseite verändert die Karte nie und die Simulation schreibt nichts in die Datenbank.
 
 ## Datenschutz
 

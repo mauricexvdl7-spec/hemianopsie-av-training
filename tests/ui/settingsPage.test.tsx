@@ -91,6 +91,24 @@ describe('SettingsPage', () => {
     expect((await db.getController())!.halfLifeSessions).toBe(12);
   }, 15_000);
 
+  it('leere oder ungültige Halbwertszeit wird nicht gespeichert', async () => {
+    const { db, root, onChanged } = await mount();
+    const before = (await db.getController())!.halfLifeSessions;
+    const input = root.querySelector<HTMLInputElement>('input[aria-label="Halbwertszeit in Sitzungen"]')!;
+    for (const v of ['', '   ', 'abc']) {
+      input.value = v;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await settle();
+      button(root, 'Halbwertszeit speichern').click();
+      await until(() => root.textContent!.includes('Bitte eine Zahl von 3 bis 20 eingeben.'));
+      expect(root.textContent).toContain('Bitte eine Zahl von 3 bis 20 eingeben.');
+      expect(root.textContent).not.toContain(SAVED);
+    }
+    await settle();
+    expect((await db.getController())!.halfLifeSessions).toBe(before);
+    expect(onChanged).not.toHaveBeenCalled();
+  }, 15_000);
+
   it('ohne Geometrie: Hinweis statt Phase und Vergessen', async () => {
     const { root } = await mount(false);
     expect(root.querySelector('select[aria-label="Phase"]')).toBeNull();

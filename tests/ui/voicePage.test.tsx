@@ -31,6 +31,7 @@ function fakeVoice(local = true) {
     setRecordings: vi.fn(),
     say: vi.fn(() => Promise.resolve()),
     cancel: vi.fn(),
+    unlock: vi.fn(),
     hasLocalGermanVoice: () => local,
     onVoicesChanged: () => () => undefined,
   };
@@ -133,6 +134,31 @@ describe('VoicePage', () => {
     expect(voice.setTexts).toHaveBeenLastCalledWith({ end: 'Gespeichert.' });
     expect(voice.setTexts.mock.invocationCallOrder[0]!).toBeLessThan(voice.say.mock.invocationCallOrder[0]!);
     expect(voice.say.mock.invocationCallOrder[0]!).toBeLessThan(voice.setTexts.mock.invocationCallOrder[1]!);
+  });
+
+  it('„Anhören“: erst laufende Ansage abbrechen, dann im Klick Ton und Stimme freischalten, dann sprechen', async () => {
+    const { root, voice, audio } = await mount();
+    button(row(root, 'Ende der Übung'), 'Anhören').click();
+    // synchron im Klick, vor jedem Warten
+    expect(voice.cancel).toHaveBeenCalledTimes(1);
+    expect(audio.ensureRunning).toHaveBeenCalledTimes(1);
+    expect(voice.unlock).toHaveBeenCalledTimes(1);
+    expect(voice.say).toHaveBeenCalledWith('end');
+    const order = [
+      voice.cancel.mock.invocationCallOrder[0]!,
+      audio.ensureRunning.mock.invocationCallOrder[0]!,
+      voice.unlock.mock.invocationCallOrder[0]!,
+      voice.setTexts.mock.invocationCallOrder[0]!,
+      voice.say.mock.invocationCallOrder[0]!,
+    ];
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('bricht beim Verlassen der Seite eine laufende Ansage ab', async () => {
+    const { voice, unmount } = await mount();
+    voice.cancel.mockClear();
+    unmount();
+    expect(voice.cancel).toHaveBeenCalledTimes(1);
   });
 
   it('nimmt auf, hört zur Probe und speichert die Aufnahme', async () => {

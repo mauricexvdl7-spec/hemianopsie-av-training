@@ -57,6 +57,8 @@ describe('AdminHome', () => {
       ['Testseite', '#/admin/test'],
       ['Einrichtung wiederholen', '#/setup'],
     ]);
+    const settingsLink = root.querySelector('a[href="#/admin/settings"]')!;
+    expect(settingsLink.textContent).toContain('Sitzungsdauer, Tempo, Raster, Phase, Vergessen');
     expect(root.textContent).toContain(DISCLAIMER_TEXT);
     await settle();
     await settle();

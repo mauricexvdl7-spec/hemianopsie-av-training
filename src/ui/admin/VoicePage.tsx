@@ -7,6 +7,7 @@ import type { AudioEngine } from '../../io/audio';
 import { pickRecordingMime, RECORDING_MAX_MS, startRecording, type ActiveRecording } from '../../io/recorder';
 import { ANNOUNCEMENT_KEYS, DEFAULT_ANNOUNCEMENTS, type AnnouncementKey, type Voice } from '../../io/voice';
 import type { Db } from '../../store/db';
+import { unlockAudio } from '../unlockAudio';
 import { NO_GERMAN_VOICE_TEXT } from './AdminHome';
 
 type Texts = Partial<Record<AnnouncementKey, string>>;
@@ -244,8 +245,15 @@ export function VoicePage(props: { db: Db; voice: Voice; audio: AudioEngine; onC
     }
   };
 
+  // Beim Verlassen der Seite nicht weitersprechen
+  useEffect(() => () => props.voice.cancel(), [props.voice]);
+
   /** Entwurf nur für diese Ansage aufsetzen; die gespeicherten Texte bleiben danach die der Stimme. */
   const listen = (key: AnnouncementKey) => {
+    // Laufende Ansage abbrechen, dann synchron im Klick Ton (für Aufnahmen) und Stimme freischalten (iOS)
+    props.voice.cancel();
+    unlockAudio(props.audio);
+    props.voice.unlock();
     props.voice.setTexts(drafts);
     void props.voice.say(key);
     props.voice.setTexts(savedTexts);
