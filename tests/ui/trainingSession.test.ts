@@ -5,7 +5,10 @@ import { createRng } from '../../src/core/rng';
 import { createControllerState } from '../../src/core/controller';
 import { DEFAULT_GRID } from '../../src/core/blocks';
 import { openDb } from '../../src/store/db';
-import { SESSION_TRIALS_M2, runTrainingSession, startTrainingSession } from '../../src/ui/session';
+import { runTrainingSession, startTrainingSession } from '../../src/ui/session';
+
+/** Feste Durchgangszahl dieser Tests (die App läuft nach Zeit). */
+const SESSION_TRIALS = 60;
 import type { RunnerDeps } from '../../src/ui/runner';
 import { fakeDeps } from '../helpers/fakeRunner';
 import { sampleRecord } from '../helpers/plans';
@@ -70,7 +73,7 @@ function setup(over: Partial<Parameters<typeof runTrainingSession>[0]> = {}) {
       deps: autoDeps(null),
       geometry,
       responseWindowMs: 2000,
-      trials: SESSION_TRIALS_M2,
+      trials: SESSION_TRIALS,
       sessionId: 'sess-1',
       // Jeder Aufruf der Uhr vergeht eine Sekunde: Beginn und Ende sind unterscheidbar.
       now: () => {
@@ -90,7 +93,7 @@ describe('runTrainingSession', () => {
     const { db, args, ticks } = await setup();
     const res = await runTrainingSession(args);
     expect(res.aborted).toBe(false);
-    expect(res.records).toHaveLength(SESSION_TRIALS_M2);
+    expect(res.records).toHaveLength(SESSION_TRIALS);
 
     const saved = await db.listTrials('sess-1');
     expect(saved).toHaveLength(60);
@@ -170,11 +173,11 @@ describe('runTrainingSession', () => {
     const second = await handle.run(autoDeps(null));
     expect(second.aborted).toBe(false);
     // 4 gewertete Durchgänge zählen schon; der abgebrochene wird nicht mitgezählt, es fehlen noch 56.
-    expect(second.records).toHaveLength(SESSION_TRIALS_M2 - 4);
+    expect(second.records).toHaveLength(SESSION_TRIALS - 4);
     await handle.finish();
 
     const all = await db.listTrials('sess-1');
-    expect(all.filter((r) => r.outcome !== 'aborted')).toHaveLength(SESSION_TRIALS_M2);
+    expect(all.filter((r) => r.outcome !== 'aborted')).toHaveLength(SESSION_TRIALS);
     const controller = (await db.getController())!;
     expect(controller.sessionCount).toBe(1);
     expect((await db.listMapSnapshots()).map((s) => s.id)).toEqual(['sess-1:sessionEnd']);

@@ -54,9 +54,6 @@ export async function runBlock(args: {
   return out;
 }
 
-/** Durchgänge einer Trainingssitzung ab Meilenstein 2. */
-export const SESSION_TRIALS_M2 = 60;
-
 export interface TrainingSessionArgs {
   db: Db;
   deps: RunnerDeps;

@@ -1,6 +1,7 @@
 /** App-Gerüst: lädt Datenbank und Einstellungen, wählt den Bildschirm nach dem Hash. */
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import { AudioEngine, startupAudioSettings } from '../io/audio';
+import { createBrowserVoice } from '../io/voice';
 import { openDb, type Db, type Settings } from '../store/db';
 import { ExportPage } from './admin/ExportPage';
 import { TestPage } from './admin/TestPage';
@@ -12,6 +13,7 @@ import { unlockAudio } from './unlockAudio';
 
 export function App() {
   const audio = useMemo(() => new AudioEngine(), []);
+  const voice = useMemo(() => createBrowserVoice(audio), [audio]);
   const [db, setDb] = useState<Db | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [hash, setHash] = useState(location.hash);
@@ -24,18 +26,27 @@ export function App() {
         setDb(d);
         const s = await d.getSettings();
         audio.apply(startupAudioSettings(s.audio));
+        await loadVoice(d, s);
         setSettings(s);
       })
       .catch(() => setError('Der Speicher dieses Geräts ist nicht verfügbar. Bitte die App vom Home-Bildschirm starten, nicht im privaten Modus.'));
     const onHash = () => setHash(location.hash);
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
-  }, [audio]);
+  }, [audio, voice]);
+
+  /** Eigene Ansagetexte und Aufnahmen an die Stimme geben; ohne lesbare Aufnahmen spricht die Systemstimme. */
+  async function loadVoice(d: Db, s: Settings): Promise<void> {
+    voice.setTexts(s.announcements);
+    const recs = await d.listRecordings().catch(() => []);
+    voice.setRecordings(new Map(recs.map((r) => [r.key, r.data])));
+  }
 
   const reload = async () => {
     if (!db) return;
     const s = await db.getSettings();
     audio.apply(startupAudioSettings(s.audio));
+    await loadVoice(db, s);
     setSettings(s);
   };
 
@@ -70,13 +81,14 @@ export function App() {
     case 'start':
     case 'train':
       if (training) {
-        return <TrainingScreen db={db} audio={audio} settings={settings} onExit={() => setTraining(false)} />;
+        return <TrainingScreen db={db} audio={audio} voice={voice} settings={settings} onExit={() => setTraining(false)} />;
       }
       return (
         <StartScreen
           onStart={() => {
-            // Audio und Bildschirmsperre nur innerhalb einer Berührung freischalten (iOS)
+            // Audio, Stimme und Bildschirmsperre nur innerhalb einer Berührung freischalten (iOS)
             unlockAudio(audio);
+            voice.unlock();
             void (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<unknown> } }).wakeLock
               ?.request('screen')
               .catch(() => undefined);

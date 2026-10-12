@@ -183,9 +183,10 @@ body {
   margin: 0;
 }
 
+/* Hinweise auf Patientenbildschirmen in voller Textfarbe, nie gedämpft */
 .message-hint {
-  font-size: 28px;
-  color: var(--muted);
+  font-size: 36px;
+  color: var(--text);
   margin: 28px 0 0;
 }
 
@@ -198,7 +199,7 @@ body {
 
 .summary-lead {
   font-size: 36px;
-  color: var(--muted);
+  color: var(--text);
   margin: 0;
 }
 
@@ -215,7 +216,7 @@ body {
 .summary-count .of {
   font-size: 0.5em;
   font-weight: 400;
-  color: var(--muted);
+  color: var(--text);
 }
 
 .summary-bar {
@@ -229,6 +230,50 @@ body {
   height: 100%;
   border-radius: var(--radius-round);
   background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+}
+
+/* Folgesatz der Tagesrückmeldung („Gestern waren es …“ oder Ermutigung) */
+.summary-follow {
+  font-size: clamp(36px, 4.6vw, 48px);
+  line-height: 1.25;
+  color: var(--text);
+  margin: 28px 0 0;
+}
+
+/* Pause: Balken über die 30 s Mindestdauer, gleichmäßig per transition, ohne Blinken */
+.pause-bar {
+  height: 14px;
+  margin-top: 28px;
+  border-radius: var(--radius-round);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.pause-bar > div {
+  height: 100%;
+  border-radius: var(--radius-round);
+  background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+  transition: width 500ms linear;
+}
+
+/* Knopf „Fertig für heute“ unter der Karte, rechts der Mitte */
+.finish-button {
+  margin-top: 36px;
+  padding: 22px 44px;
+  min-height: 88px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-round);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 40px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms;
+}
+
+.finish-button:active {
+  opacity: 0.85;
 }
 
 /* ---------- Einrichtung und Verwaltung ---------- */
