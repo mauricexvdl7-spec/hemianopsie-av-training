@@ -5,6 +5,10 @@ import type { Db } from '../../store/db';
 import { DISCLAIMER_TEXT } from '../setup/steps/Disclaimer';
 import { exportReminderDue } from './exportReminder';
 
+/** Hinweis, wenn keine lokale deutsche Stimme vorhanden ist (Startseite und Ansagen). */
+export const NO_GERMAN_VOICE_TEXT =
+  'Auf diesem Gerät fehlt eine deutsche Stimme. Bitte in den iPad-Einstellungen unter Bedienungshilfen → Gesprochene Inhalte → Stimmen eine deutsche Stimme laden oder eigene Aufnahmen machen.';
+
 const LINKS: ReadonlyArray<{ href: string; title: string; text: string }> = [
   { href: '#/admin/eval', title: 'Auswertung', text: 'Karte, Verlauf und Kennzahlen' },
   { href: '#/admin/report', title: 'Monatsbericht', text: 'Zum Ausdrucken für die Ärztin oder den Arzt' },
@@ -61,10 +65,7 @@ export function AdminHome(props: { db: Db; voice: Voice; onLeave(): void }) {
 
         {!hasVoice && (
           <section class="card notice">
-            <p>
-              Auf diesem Gerät fehlt eine deutsche Stimme. Bitte in den iPad-Einstellungen unter Bedienungshilfen → Gesprochene Inhalte →
-              Stimmen eine deutsche Stimme laden oder eigene Aufnahmen machen.
-            </p>
+            <p>{NO_GERMAN_VOICE_TEXT}</p>
           </section>
         )}
 

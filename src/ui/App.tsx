@@ -11,6 +11,7 @@ import { ExportPage } from './admin/ExportPage';
 import { PinScreen } from './admin/PinScreen';
 import { SettingsPage } from './admin/SettingsPage';
 import { TestPage } from './admin/TestPage';
+import { VoicePage } from './admin/VoicePage';
 import { StartScreen } from './patient/StartScreen';
 import { TrainingScreen } from './patient/TrainingScreen';
 import { resolveRoute } from './routing';
@@ -96,11 +97,12 @@ export function App() {
         />
       );
     case 'admin':
-    // Seiten aus Task 10–12 folgen; bis dahin die Startseite des Bereichs
-    case 'voice':
+    // Seiten aus Task 11–12 folgen; bis dahin die Startseite des Bereichs
     case 'eval':
     case 'report':
       return <AdminHome db={db} voice={voice} onLeave={leaveAdmin} />;
+    case 'voice':
+      return <VoicePage db={db} voice={voice} audio={audio} onChanged={() => void reload()} />;
     case 'settings':
       return <SettingsPage db={db} onChanged={() => void reload()} />;
     case 'setup':

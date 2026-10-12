@@ -718,3 +718,9 @@ input[type='file'] + .result-line {
   font-size: 28px;
   letter-spacing: 0.3em;
 }
+
+/* Ansagen: Textfeld über die ganze Breite */
+.admin input.announcement-text {
+  width: 100%;
+  margin: 0 0 12px;
+}
