@@ -70,6 +70,22 @@ describe('runBlock', () => {
     expect(seen).toHaveLength(20);
   });
 
+  it('shouldStop wird vor jedem Durchgang geprüft', async () => {
+    const db = await openDb(`session-db-${n++}`);
+    let calls = 0;
+    const recs = await runBlock({
+      db,
+      planner: planner(),
+      deps: autoDeps(null),
+      sessionId: 's',
+      trials: 20,
+      nowIso: () => '2026-10-11T10:00:00.000Z',
+      shouldStop: () => calls++ >= 4,
+    });
+    expect(recs).toHaveLength(4);
+    expect(await db.listTrials('s')).toHaveLength(4);
+  });
+
   it('Abbruch im 3. Durchgang → 3 Datensätze, letzter abgebrochen', async () => {
     const db = await openDb(`session-db-${n++}`);
     const recs = await runBlock({

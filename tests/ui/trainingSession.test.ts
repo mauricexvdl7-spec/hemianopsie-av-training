@@ -1,12 +1,26 @@
 import 'fake-indexeddb/auto';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { makeGeometry } from '../../src/core/geometry';
 import { createRng } from '../../src/core/rng';
 import { createControllerState } from '../../src/core/controller';
+import { DEFAULT_GRID } from '../../src/core/blocks';
 import { openDb } from '../../src/store/db';
 import { SESSION_TRIALS_M2, runTrainingSession, startTrainingSession } from '../../src/ui/session';
 import type { RunnerDeps } from '../../src/ui/runner';
 import { fakeDeps } from '../helpers/fakeRunner';
+import { sampleRecord } from '../helpers/plans';
+
+// Schutzgrenze pro Test einstellbar (Standard unverändert 800).
+const limits = vi.hoisted(() => ({ max: 800 }));
+vi.mock('../../src/core/schedule', async (importOriginal) => {
+  const orig = await importOriginal<typeof import('../../src/core/schedule')>();
+  return {
+    ...orig,
+    get MAX_TRIALS_PER_SESSION() {
+      return limits.max;
+    },
+  };
+});
 
 let n = 0;
 const geometry = makeGeometry({ screenWidthCm: 24, viewingDistanceCm: 30, fixationXFraction: 2 / 3, fixationYFraction: 0.5 }, 1200, 800);
@@ -221,5 +235,123 @@ describe('runTrainingSession', () => {
     const controller = (await db.getController())!;
     expect(controller.gridSignature).not.toBe(old.gridSignature);
     expect(controller.sessionCount).toBe(old.sessionCount + 1);
+  });
+
+  describe('zeitgesteuerte Läufe', () => {
+    it('stopWhen: genau 3 Durchgänge, nicht abgebrochen', async () => {
+      const { args } = await setup({ trials: undefined });
+      const handle = await startTrainingSession(args);
+      let calls = 0;
+      const res = await handle.run(args.deps, { stopWhen: () => calls++ >= 3 });
+      expect(res.records).toHaveLength(3);
+      expect(res.aborted).toBe(false);
+    });
+
+    it('activeMs wächst im Lauf und zählt nur Läufe, nicht die Zeit dazwischen', async () => {
+      let offsetMs = 0;
+      const base = Date.UTC(2026, 9, 11, 10, 0, 0);
+      const { args } = await setup({
+        now: () => new Date(base + offsetMs),
+        onTrial: () => {
+          offsetMs += 4000;
+        },
+        trials: undefined,
+      });
+      const handle = await startTrainingSession(args);
+      expect(handle.activeMs()).toBe(0);
+      const seen: number[] = [];
+      let calls = 0;
+      await handle.run(args.deps, {
+        stopWhen: () => {
+          seen.push(handle.activeMs());
+          return calls++ >= 3;
+        },
+      });
+      // Vor jedem Durchgang gemessen: 0, 4 s, 8 s, 12 s, 12 s (Vergleich bei Abbruchprüfung).
+      expect(seen[0]).toBe(0);
+      expect(seen[1]!).toBeGreaterThan(seen[0]!);
+      expect(seen[2]!).toBeGreaterThan(seen[1]!);
+      expect(handle.activeMs()).toBe(12_000);
+      offsetMs += 10 * 60_000; // Pause zwischen den Läufen zählt nicht
+      expect(handle.activeMs()).toBe(12_000);
+      let calls2 = 0;
+      await handle.run(autoDeps(null), { stopWhen: () => calls2++ >= 2 });
+      expect(handle.activeMs()).toBe(20_000);
+    });
+
+    it('ohne trials und mit stopWhen false endet der Lauf bei MAX_TRIALS_PER_SESSION', async () => {
+      limits.max = 5;
+      try {
+        const { db, args } = await setup({ trials: undefined });
+        const handle = await startTrainingSession(args);
+        const res = await handle.run(args.deps, { stopWhen: () => false });
+        expect(res.records.filter((r) => r.outcome !== 'aborted')).toHaveLength(5);
+        // Ein weiterer Lauf spielt nichts mehr ab.
+        const again = await handle.run(autoDeps(null), { stopWhen: () => false });
+        expect(again.records).toHaveLength(0);
+        expect((await db.listTrials('sess-1')).length).toBe(5);
+      } finally {
+        limits.max = 800;
+      }
+    });
+
+    it('offene Sitzung wird beim Start geschlossen: Ende = Beginn ihres letzten Durchgangs, summary null', async () => {
+      const { db, args } = await setup({ trials: 1 });
+      await db.addSession({
+        id: 'old',
+        startedAtIso: '2026-10-11T09:00:00.000Z',
+        endedAtIso: null,
+        dayKey: '2026-10-11',
+        kind: 'training',
+        trialCount: 2,
+      });
+      await db.addTrial(sampleRecord({ id: 'old-0', sessionId: 'old', startedAtIso: '2026-10-11T09:05:00.000Z' }));
+      await db.addTrial(sampleRecord({ id: 'old-1', sessionId: 'old', startedAtIso: '2026-10-11T09:10:00.000Z' }));
+      // Offene Sitzung ohne Durchgang: Ende = eigener Beginn. Referenzsitzungen bleiben unberührt.
+      await db.addSession({ id: 'empty', startedAtIso: '2026-10-10T08:00:00.000Z', endedAtIso: null, dayKey: '2026-10-10', kind: 'training', trialCount: 0 });
+      await db.addSession({ id: 'ref', startedAtIso: '2026-10-10T07:00:00.000Z', endedAtIso: null, dayKey: '2026-10-10', kind: 'reference', trialCount: 0 });
+
+      await startTrainingSession(args);
+
+      const byId = new Map((await db.listSessions()).map((s) => [s.id, s]));
+      expect(byId.get('old')!.endedAtIso).toBe('2026-10-11T09:10:00.000Z');
+      expect(byId.get('old')!.summary ?? null).toBeNull();
+      expect(byId.get('empty')!.endedAtIso).toBe('2026-10-10T08:00:00.000Z');
+      expect(byId.get('ref')!.endedAtIso).toBeNull();
+      // Die neue Sitzung bleibt offen.
+      expect(byId.get('sess-1')!.endedAtIso).toBeNull();
+    });
+
+    it('Abbruch, dann neue Sitzung: die gespeicherte Karte wird nicht noch einmal vergessen', async () => {
+      const { db, args } = await setup({ deps: autoDeps(10), trials: 30 });
+      const first = await runTrainingSession(args);
+      expect(first.aborted).toBe(true);
+      const saved = (await db.getController())!;
+      expect(saved.openSession).toBe(true);
+      expect(saved.map.logLik.some((row) => row.some((v) => v !== 0))).toBe(true);
+
+      const next = await startTrainingSession({ ...args, sessionId: 'sess-2', rng: createRng(9) });
+      expect(next.planner.state().map.logLik).toEqual(saved.map.logLik);
+      // Die abgebrochene Sitzung wurde dabei geschlossen.
+      const old = (await db.listSessions()).find((s) => s.id === 'sess-1')!;
+      expect(old.endedAtIso).not.toBeNull();
+      expect(old.summary ?? null).toBeNull();
+    });
+
+    it('finish speichert den Snapshot mit guess', async () => {
+      const { db, args } = await setup({ trials: 5 });
+      await runTrainingSession(args);
+      const snap = (await db.listMapSnapshots()).find((s) => s.reason === 'sessionEnd')!;
+      expect(snap.guess).toEqual((await db.getController())!.guess);
+      expect(snap.guess).toBeDefined();
+    });
+
+    it('anderes Raster: gespeicherter Controller hat andere gridSignature', async () => {
+      const a = await setup({ trials: 3 });
+      await runTrainingSession(a.args);
+      const b = await setup({ trials: 3, grid: { ...DEFAULT_GRID, angleStepDeg: 30 } });
+      await runTrainingSession(b.args);
+      expect((await b.db.getController())!.gridSignature).not.toBe((await a.db.getController())!.gridSignature);
+    });
   });
 });

@@ -6,6 +6,8 @@ import {
   endSession,
   type SessionPlanner,
 } from '../core/controller';
+import type { GridConfig } from '../core/blocks';
+import { MAX_TRIALS_PER_SESSION } from '../core/schedule';
 import type { Geometry } from '../core/geometry';
 import type { Rng } from '../core/rng';
 import type { TimingSettings } from '../core/timing';
@@ -34,9 +36,12 @@ export async function runBlock(args: {
   onTrial?(r: TrialRecord): void;
   /** Wandelt den Datensatz um, bevor er gespeichert wird (z. B. `planner.apply`). */
   transform?(r: TrialRecord): TrialRecord;
+  /** Wird vor jedem Durchgang gefragt; ist die Antwort wahr, endet der Block ohne weiteren Durchgang. */
+  shouldStop?(): boolean;
 }): Promise<TrialRecord[]> {
   const out: TrialRecord[] = [];
   for (let i = 0; i < args.trials; i++) {
+    if (args.shouldStop?.()) break;
     const plan = args.planner.next();
     const raw = await runTrial(plan, args.deps, args.nowIso());
     const rec = args.transform ? args.transform(raw) : raw;
@@ -58,8 +63,13 @@ export interface TrainingSessionArgs {
   responseWindowMs: number;
   /** Tempo aus den Einstellungen; die Sitzung behält das Tempo, mit dem sie begonnen hat. */
   timing?: Partial<TimingSettings>;
-  /** Gewünschte Zahl gewerteter Durchgänge der ganzen Sitzung (abgebrochene zählen nicht). */
-  trials: number;
+  /**
+   * Gewünschte Zahl gewerteter Durchgänge der ganzen Sitzung (abgebrochene zählen nicht).
+   * Fehlt sie, läuft die Sitzung, bis `stopWhen` wahr ist; höchstens `MAX_TRIALS_PER_SESSION` gewertete Durchgänge.
+   */
+  trials?: number;
+  /** Raster der Reizorte; Standard `DEFAULT_GRID`. */
+  grid?: GridConfig;
   sessionId: string;
   now(): Date;
   onTrial?(r: TrialRecord): void;
@@ -78,11 +88,25 @@ export interface TrainingSession {
   /**
    * Spielt die noch fehlenden Durchgänge ab. Bei Abbruch (`aborted: true`) ist der Zustand von Karte und Treppe
    * bereits gespeichert, die Sitzung aber nicht beendet; ein weiterer Aufruf macht mit demselben Planer weiter.
-   * Zurückgegeben werden nur die Datensätze dieses Aufrufs.
+   * Zurückgegeben werden nur die Datensätze dieses Aufrufs. `stopWhen` wird vor jedem Durchgang gefragt.
    */
-  run(deps: RunnerDeps): Promise<{ records: TrialRecord[]; aborted: boolean }>;
+  run(deps: RunnerDeps, opts?: { stopWhen?(): boolean }): Promise<{ records: TrialRecord[]; aborted: boolean }>;
+  /** Aktive Zeit in ms: Summe abgeschlossener Läufe plus laufender Lauf (Pausen zwischen den Läufen zählen nicht). */
+  activeMs(): number;
   /** Sitzungsende: Phasenkriterium, Sitzungszähler, Controller, Karten-Snapshot und Sitzungsdatensatz. */
   finish(): Promise<void>;
+}
+
+/**
+ * Schließt Trainingssitzungen, die nie beendet wurden (App geschlossen, Absturz): Ende = Beginn ihres letzten
+ * Durchgangs, sonst ihr eigener Beginn. Es gibt keine Phasenbewertung (`summary` bleibt leer).
+ */
+async function closeOrphanSessions(db: Db, exceptId: string): Promise<void> {
+  const open = (await db.listSessions()).filter((s) => s.kind === 'training' && s.endedAtIso === null && s.id !== exceptId);
+  for (const s of open) {
+    const last = (await db.listTrials(s.id)).map((t) => t.startedAtIso).sort().at(-1);
+    await db.updateSession({ ...s, endedAtIso: last ?? s.startedAtIso });
+  }
 }
 
 /**
@@ -92,8 +116,9 @@ export interface TrainingSession {
 export async function startTrainingSession(args: TrainingSessionArgs): Promise<TrainingSession> {
   const { db, geometry } = args;
   const startedAt = args.now();
-  const stored = (await db.getController()) ?? createControllerState(geometry);
-  const { state, replacedMap } = beginSession(stored, geometry);
+  await closeOrphanSessions(db, args.sessionId);
+  const stored = (await db.getController()) ?? createControllerState(geometry, args.grid);
+  const { state, replacedMap } = beginSession(stored, geometry, args.grid);
   if (replacedMap) {
     await db.addMapSnapshot({
       id: `${args.sessionId}:gridChanged`,
@@ -111,6 +136,7 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
     sessionId: args.sessionId,
     responseWindowMs: args.responseWindowMs,
     timing: args.timing,
+    grid: args.grid,
   });
   const session: SessionRecord = {
     id: args.sessionId,
@@ -123,22 +149,27 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
   await db.addSession(session);
   const records: TrialRecord[] = [];
   // Nur die Zeit, in der ein Lauf wirklich spielt: Pausen zwischen den Läufen und Hintergrundzeit zählen nicht (Spec 9).
-  let activeMs = 0;
+  let finishedMs = 0;
+  let runStart: number | null = null;
+  const activeMs = () => finishedMs + (runStart === null ? 0 : Math.max(0, args.now().getTime() - runStart));
 
   return {
     planner,
     session,
     records,
-    async run(deps) {
-      const runStart = args.now().getTime();
+    activeMs,
+    async run(deps, opts) {
+      runStart = args.now().getTime();
       try {
         const done = records.filter((r) => r.outcome !== 'aborted').length;
+        const target = Math.min(args.trials ?? MAX_TRIALS_PER_SESSION, MAX_TRIALS_PER_SESSION);
         const recs = await runBlock({
           db,
           planner,
           deps,
           sessionId: args.sessionId,
-          trials: Math.max(0, args.trials - done),
+          trials: Math.max(0, target - done),
+          shouldStop: opts?.stopWhen,
           nowIso: () => args.now().toISOString(),
           onTrial: args.onTrial,
           transform: (r) => planner.apply(r),
@@ -153,12 +184,13 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
         }
         return { records: recs, aborted };
       } finally {
-        activeMs += Math.max(0, args.now().getTime() - runStart);
+        finishedMs += Math.max(0, args.now().getTime() - runStart);
+        runStart = null;
       }
     },
     async finish() {
       const endedAt = args.now();
-      const durationMin = activeMs / 60000;
+      const durationMin = finishedMs / 60000;
       const summary = planner.summary(durationMin);
       const ended = endSession(planner.state(), summary, endedAt.toISOString());
       await db.saveController(ended);
@@ -170,6 +202,7 @@ export async function startTrainingSession(args: TrainingSessionArgs): Promise<T
         map: ended.map,
         stage: summary.stage,
         reason: 'sessionEnd',
+        guess: planner.state().guess,
       });
       session.endedAtIso = endedAt.toISOString();
       session.summary = summary;
