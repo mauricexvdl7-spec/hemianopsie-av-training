@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { heatColor, thresholdColor } from '../../src/ui/mapColors';
+import { diffColor, heatColor, thresholdColor } from '../../src/ui/mapColors';
 
 /** Relative Leuchtdichte nach WCAG aus #rrggbb. */
 function luminance(hex: string): number {
@@ -44,5 +44,17 @@ describe('thresholdColor', () => {
     expect(thresholdColor(20)).toBe('#4a4a4a');
     expect(thresholdColor(-1)).toBe('#e8d870');
     expect(thresholdColor(7)).toBe(heatColor(0.5));
+  });
+});
+
+describe('diffColor', () => {
+  it('0 neutral, geklemmt auf [−1, 1], Richtungen unterscheidbar', () => {
+    expect(diffColor(0)).toBe(diffColor(-0));
+    expect(diffColor(2)).toBe(diffColor(1));
+    expect(diffColor(-5)).toBe(diffColor(-1));
+    expect(diffColor(1)).not.toBe(diffColor(-1));
+    expect(diffColor(1)).not.toBe(diffColor(0));
+    expect(diffColor(Number.NaN)).toBe(diffColor(0));
+    for (const v of [-1, -0.5, 0, 0.5, 1]) expect(diffColor(v)).toMatch(/^#[0-9a-f]{6}$/);
   });
 });

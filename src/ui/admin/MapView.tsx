@@ -5,7 +5,7 @@ import type { GuessRateState } from '../../core/guessRate';
 import { summarizePoint, type MapState } from '../../core/map';
 import { REFERENCE_LEVEL } from '../../core/stimulus';
 import type { VisualPos } from '../../core/types';
-import { heatColor, thresholdColor } from '../mapColors';
+import { diffColor, heatColor, thresholdColor } from '../mapColors';
 import { token } from '../theme';
 
 export type MapMode = 'prob' | 'theta';
@@ -29,6 +29,27 @@ export function cellsFromMap(map: MapState, guess: GuessRateState): MapCell[] {
   });
 }
 
+/** to − from je Punkt (p und theta); null, wenn die Punkt-IDs nicht übereinstimmen (Raster geändert). */
+export function diffCells(from: MapCell[], to: MapCell[]): MapCell[] | null {
+  if (from.length !== to.length) return null;
+  const before = new Map(from.map((c) => [c.id, c]));
+  const out: MapCell[] = [];
+  for (const c of to) {
+    const b = before.get(c.id);
+    if (!b) return null;
+    out.push({ id: c.id, pos: c.pos, p: c.p - b.p, theta: c.theta - b.theta });
+  }
+  return out;
+}
+
+/** Verbesserung einer Differenzzelle in [−1, 1]: Δp bzw. −Δθ / 4 (niedrigere Schwelle ist besser). */
+function improvement(c: MapCell, mode: MapMode): number {
+  const v = mode === 'prob' ? c.p : -c.theta / 4;
+  return Math.min(1, Math.max(-1, v));
+}
+
+const signed = (v: number, digits: number) => `${v > 0 ? '+' : v < 0 ? '−' : '±'}${Math.abs(v).toFixed(digits)}`;
+
 const CELL_RADIUS_DEG = 2.2;
 const RING_STEP_DEG = 10;
 const WIDTH = 560;
@@ -49,8 +70,10 @@ export function MapModeToggle(props: { mode: MapMode; onChange(m: MapMode): void
   );
 }
 
-export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode }) {
+/** Karte; mit `diff` sind `cells` Differenzen (aus `diffCells`) und die Farbe zeigt besser/schlechter. */
+export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode; diff?: boolean }) {
   const { cells, mode } = props;
+  const diff = props.diff === true;
   if (cells.length === 0) return <p class="hint">Keine Rasterpunkte.</p>;
 
   // Einheitsgeometrie (Abstand 1, 1 px je Einheit, Kreuz im Ursprung): gleiche Tangens-Abbildung wie auf dem Bildschirm.
@@ -66,10 +89,11 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
   const radius = Math.max(3, Math.tan(CELL_RADIUS_DEG * RAD) * scale);
   const rings: number[] = [];
   for (let e = RING_STEP_DEG; e <= maxEcc; e += RING_STEP_DEG) rings.push(e);
-  const color = (c: MapCell) => (mode === 'prob' ? heatColor(c.p) : thresholdColor(c.theta));
+  const color = (c: MapCell) => (diff ? diffColor(improvement(c, mode)) : mode === 'prob' ? heatColor(c.p) : thresholdColor(c.theta));
+  const stopColor = (v: number) => (diff ? diffColor(2 * v - 1) : mode === 'prob' ? heatColor(v) : thresholdColor((1 - v) * 14));
   const gradient = Array.from({ length: 11 }, (_, k) => k / 10);
   const order = cells.map((_, i) => i).sort((a, b) => cells[b]!.pos.eccDeg - cells[a]!.pos.eccDeg);
-  const gid = `grad-${mode}-${props.title.replace(/[^A-Za-z0-9]/g, '')}`;
+  const gid = `grad-${mode}${diff ? '-diff' : ''}-${props.title.replace(/[^A-Za-z0-9]/g, '')}`;
 
   return (
     <figure style={{ display: 'inline-block', verticalAlign: 'top' }}>
@@ -78,13 +102,13 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
         viewBox={`0 0 ${WIDTH} ${height + 68}`}
         width={WIDTH}
         role="img"
-        aria-label={`${props.title}: Schwellen-Karte des linken Gesichtsfelds`}
+        aria-label={`${props.title}: ${diff ? 'Veränderung der Schwellen-Karte' : 'Schwellen-Karte'} des linken Gesichtsfelds`}
         style={{ maxWidth: '100%', height: 'auto', background: token('--bg'), borderRadius: '10px', border: `1px solid ${token('--border')}` }}
       >
         <defs>
           <linearGradient id={gid} x1="0" x2="1" y1="0" y2="0">
             {gradient.map((v) => (
-              <stop key={v} offset={`${v * 100}%`} stop-color={mode === 'prob' ? heatColor(v) : thresholdColor((1 - v) * 14)} />
+              <stop key={v} offset={`${v * 100}%`} stop-color={stopColor(v)} />
             ))}
           </linearGradient>
         </defs>
@@ -100,7 +124,9 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
         {order.map((i) => {
           const c = cells[i]!;
           const r = raw[i]!;
-          const tip = `${c.id}: p ${(c.p * 100).toFixed(0)} %, Schwelle ${c.theta.toFixed(1)}${c.thetaSd !== undefined ? ` ± ${c.thetaSd.toFixed(1)}` : ''}`;
+          const tip = diff
+            ? `${c.id}: p ${signed(c.p * 100, 0)} Prozentpunkte, Schwelle ${signed(c.theta, 1)}`
+            : `${c.id}: p ${(c.p * 100).toFixed(0)} %, Schwelle ${c.theta.toFixed(1)}${c.thetaSd !== undefined ? ` ± ${c.thetaSd.toFixed(1)}` : ''}`;
           return (
             <circle key={c.id} cx={fx + r.x * scale} cy={fy + r.y * scale} r={radius} fill={color(c)} fill-opacity={0.92}>
               <title>{tip}</title>
@@ -137,10 +163,15 @@ export function MapView(props: { title: string; cells: MapCell[]; mode: MapMode 
         </text>
         <rect x={MARGIN} y={height + 24} width={WIDTH - 2 * MARGIN} height={14} fill={`url(#${gid})`} stroke="#777" />
         <text x={MARGIN} y={height + 58} fill={token('--text')} font-size="16">
-          {mode === 'prob' ? '0 % (nicht gesehen)' : 'Schwelle 14 (nicht sichtbar)'}
+          {diff ? 'schlechter' : mode === 'prob' ? '0 % (nicht gesehen)' : 'Schwelle 14 (nicht sichtbar)'}
         </text>
+        {diff && (
+          <text x={WIDTH / 2} y={height + 58} fill={token('--text')} font-size="16" text-anchor="middle">
+            gleich
+          </text>
+        )}
         <text x={WIDTH - MARGIN} y={height + 58} fill={token('--text')} font-size="16" text-anchor="end">
-          {mode === 'prob' ? '100 % (sicher gesehen)' : 'Schwelle 0 (gut sichtbar)'}
+          {diff ? 'besser' : mode === 'prob' ? '100 % (sicher gesehen)' : 'Schwelle 0 (gut sichtbar)'}
         </text>
       </svg>
     </figure>

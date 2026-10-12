@@ -1,4 +1,5 @@
 /** Farbskala der Schwellen-Karte (Admin-Ansicht): dunkelgrau über gedämpftes Blau bis hellgelb. */
+import { token } from './theme';
 
 const STOPS: ReadonlyArray<readonly [number, number, number]> = [
   [0x4a, 0x4a, 0x4a],
@@ -25,4 +26,23 @@ export const THRESHOLD_COLOR_MAX = 14;
 /** Farbe für eine Schwelle θ̄ (Stufen): 1 − θ̄/14, d. h. niedrige Schwelle (gut sichtbar) hell. */
 export function thresholdColor(theta: number): string {
   return heatColor(1 - theta / THRESHOLD_COLOR_MAX);
+}
+
+/** Farben der Differenzkarte: neutral grau, besser Akzent Petrol (--accent-strong), schlechter Bernstein. */
+const DIFF_NEUTRAL = [0x6a, 0x6a, 0x6a] as const;
+const DIFF_BETTER = rgb(token('--accent-strong'));
+const DIFF_WORSE = [0xe0, 0xa4, 0x48] as const;
+
+function rgb(h: string): readonly [number, number, number] {
+  const n = Number.parseInt(h.replace('#', ''), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** improvement in [-1, 1]: 0 neutral grau, > 0 Richtung Akzent Petrol, < 0 Richtung Bernstein; geklemmt. */
+export function diffColor(improvement: number): string {
+  const q = Number.isFinite(improvement) ? Math.min(1, Math.max(-1, improvement)) : 0;
+  const end = q > 0 ? DIFF_BETTER : DIFF_WORSE;
+  const f = Math.abs(q);
+  const mix = (i: 0 | 1 | 2) => hex(DIFF_NEUTRAL[i] + (end[i] - DIFF_NEUTRAL[i]) * f);
+  return `#${mix(0)}${mix(1)}${mix(2)}`;
 }

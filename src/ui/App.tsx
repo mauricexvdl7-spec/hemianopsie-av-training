@@ -7,6 +7,7 @@ import { AudioEngine, startupAudioSettings } from '../io/audio';
 import { createBrowserVoice } from '../io/voice';
 import { openDb, type Db, type Settings } from '../store/db';
 import { AdminHome } from './admin/AdminHome';
+import { EvaluationPage } from './admin/EvaluationPage';
 import { ExportPage } from './admin/ExportPage';
 import { PinScreen } from './admin/PinScreen';
 import { SettingsPage } from './admin/SettingsPage';
@@ -97,10 +98,11 @@ export function App() {
         />
       );
     case 'admin':
-    // Seiten aus Task 11–12 folgen; bis dahin die Startseite des Bereichs
-    case 'eval':
+    // Monatsbericht folgt (Task 12); bis dahin die Startseite des Bereichs
     case 'report':
       return <AdminHome db={db} voice={voice} onLeave={leaveAdmin} />;
+    case 'eval':
+      return <EvaluationPage db={db} />;
     case 'voice':
       return <VoicePage db={db} voice={voice} audio={audio} onChanged={() => void reload()} />;
     case 'settings':

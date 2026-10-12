@@ -724,3 +724,25 @@ input[type='file'] + .result-line {
   width: 100%;
   margin: 0 0 12px;
 }
+
+/* Auswertung: Verläufe */
+.admin .line-chart {
+  margin: 16px 0 24px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-top: 8px;
+  font-size: 18px;
+}
+
+.chart-swatch {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  margin-right: 8px;
+  vertical-align: middle;
+  border-radius: 2px;
+}
