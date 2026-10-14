@@ -16,6 +16,7 @@ const LINKS: ReadonlyArray<{ href: string; title: string; text: string }> = [
   { href: '#/admin/voice', title: 'Ansagen', text: 'Texte ändern, eigene Aufnahmen machen' },
   { href: '#/admin/export', title: 'Export und Sicherung', text: 'Daten sichern, als Tabelle teilen, einspielen' },
   { href: '#/admin/test', title: 'Testseite', text: 'Einzelne Lichter zeigen, Simulation' },
+  { href: '#/admin/camera', title: 'Kamera testen', text: 'Kamera-Lage, Kalibrierung, Blickpunkt' },
   { href: '#/setup', title: 'Einrichtung wiederholen', text: 'Bildschirm, Abstand, Ton, Reaktionszeit, PIN' },
 ];
 

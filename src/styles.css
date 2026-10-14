@@ -774,6 +774,93 @@ input[type='file'] + .result-line {
   min-width: 0;
 }
 
+/* Kamera-Testseite: kleine gespiegelte Vorschau (nur hier), Ampel für den Restfehler, Skizze des Blicks */
+.camera-live {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.camera-live > div {
+  flex: 1 1 240px;
+}
+
+.camera-live .result-line {
+  margin: 0 0 8px;
+}
+
+.camera-preview-box {
+  width: 240px;
+  max-width: 100%;
+}
+
+video.camera-preview {
+  display: block;
+  width: 100%;
+  border-radius: 10px;
+  transform: scaleX(-1);
+}
+
+.admin .camera-hint {
+  border-left: 6px solid var(--danger);
+}
+
+.admin .residual {
+  margin-top: 16px;
+  font-weight: 600;
+  color: #2b2b2b;
+}
+
+.admin .residual.good {
+  background: #9fd3a8;
+}
+
+.admin .residual.ok {
+  background: #e8d070;
+}
+
+.admin .residual.bad {
+  background: var(--danger);
+}
+
+.gaze-sketch {
+  display: block;
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 12px;
+  background: var(--bg);
+  border-radius: 10px;
+}
+
+.gaze-sketch .gaze-frame {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 0.3;
+}
+
+.gaze-sketch .gaze-cross {
+  stroke: var(--text);
+  stroke-width: 0.25;
+}
+
+.gaze-sketch .gaze-target {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 0.25;
+}
+
+.gaze-sketch .gaze-dot {
+  fill: var(--accent-strong);
+}
+
+.gaze-sketch .gaze-dot.outside {
+  fill: none;
+  stroke: var(--accent-strong);
+  stroke-width: 0.4;
+}
+
 /* ---------- Druck (Monatsbericht): heller Hintergrund nur hier ---------- */
 
 @media print {

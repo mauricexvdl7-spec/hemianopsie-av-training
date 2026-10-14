@@ -5,7 +5,7 @@ import { sampleRecord } from '../helpers/plans';
 
 const ready = { ...DEFAULT_SETTINGS, disclaimerAcceptedAt: 'x', geometry: DEFAULT_GEOMETRY };
 
-const ADMIN_HASHES = ['#/admin', '#/admin/settings', '#/admin/voice', '#/admin/eval', '#/admin/report', '#/admin/export', '#/admin/test', '#/export', '#/test'];
+const ADMIN_HASHES = ['#/admin', '#/admin/settings', '#/admin/voice', '#/admin/eval', '#/admin/report', '#/admin/export', '#/admin/test', '#/admin/camera', '#/export', '#/test'];
 
 describe('resolveRoute', () => {
   it('ohne bestätigten Hinweis immer Einrichtung', () => {
@@ -40,6 +40,11 @@ describe('resolveRoute', () => {
     }
   });
 
+  it('Kamera-Testseite nur nach PIN', () => {
+    expect(resolveRoute('#/admin/camera', ready, false)).toBe('pin');
+    expect(resolveRoute('#/admin/camera', ready, true)).toBe('camera');
+  });
+
   it('Start und Training ohne PIN', () => {
     expect(resolveRoute('#/', ready, false)).toBe('start');
     expect(resolveRoute('', ready, false)).toBe('start');
@@ -61,6 +66,7 @@ describe('resolveRoute', () => {
     expect(resolveRoute('#/export', ready, true)).toBe('export');
     expect(resolveRoute('#/admin/test', ready, true)).toBe('test');
     expect(resolveRoute('#/test', ready, true)).toBe('test');
+    expect(resolveRoute('#/admin/camera', ready, true)).toBe('camera');
     expect(resolveRoute('#/unbekannt', ready, true)).toBe('start');
   });
 });

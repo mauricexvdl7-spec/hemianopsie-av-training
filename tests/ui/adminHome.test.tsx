@@ -55,6 +55,7 @@ describe('AdminHome', () => {
       ['Ansagen', '#/admin/voice'],
       ['Export und Sicherung', '#/admin/export'],
       ['Testseite', '#/admin/test'],
+      ['Kamera testen', '#/admin/camera'],
       ['Einrichtung wiederholen', '#/setup'],
     ]);
     const settingsLink = root.querySelector('a[href="#/admin/settings"]')!;

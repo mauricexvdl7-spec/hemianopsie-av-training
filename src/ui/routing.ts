@@ -2,7 +2,7 @@
 import type { TrialRecord } from '../core/types';
 import type { Settings } from '../store/db';
 
-export type Route = 'start' | 'train' | 'setup' | 'pin' | 'admin' | 'settings' | 'voice' | 'eval' | 'report' | 'export' | 'test';
+export type Route = 'start' | 'train' | 'setup' | 'pin' | 'admin' | 'settings' | 'voice' | 'eval' | 'report' | 'export' | 'test' | 'camera';
 
 const ROUTES: Record<string, Route> = {
   '#/setup': 'setup',
@@ -14,13 +14,14 @@ const ROUTES: Record<string, Route> = {
   '#/admin/report': 'report',
   '#/admin/export': 'export',
   '#/admin/test': 'test',
+  '#/admin/camera': 'camera',
   // alte Adressen aus M1/M2
   '#/export': 'export',
   '#/test': 'test',
 };
 
 /** Routen des Bereichs für Angehörige: immer nur nach PIN-Eingabe erreichbar, auch ohne Geometrie. */
-const ADMIN_ROUTES: ReadonlySet<Route> = new Set<Route>(['admin', 'settings', 'voice', 'eval', 'report', 'export', 'test']);
+const ADMIN_ROUTES: ReadonlySet<Route> = new Set<Route>(['admin', 'settings', 'voice', 'eval', 'report', 'export', 'test', 'camera']);
 
 /**
  * Ohne bestätigten Hinweis gibt es keine Nutzung. Der PIN-Bereich braucht immer die PIN, die Einrichtung nur, wenn schon

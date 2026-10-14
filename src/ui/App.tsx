@@ -7,6 +7,7 @@ import { AudioEngine, startupAudioSettings } from '../io/audio';
 import { createBrowserVoice } from '../io/voice';
 import { openDb, type Db, type Settings } from '../store/db';
 import { AdminHome } from './admin/AdminHome';
+import { CameraTestPage } from './admin/CameraTestPage';
 import { EvaluationPage } from './admin/EvaluationPage';
 import { ExportPage } from './admin/ExportPage';
 import { PinScreen } from './admin/PinScreen';
@@ -125,6 +126,8 @@ export function App() {
       return <ExportPage db={db} onImported={() => void reload()} onSettingsChanged={() => void reload()} />;
     case 'test':
       return <TestPage db={db} audio={audio} settings={settings} />;
+    case 'camera':
+      return <CameraTestPage db={db} audio={audio} onChanged={() => void reload()} />;
     case 'start':
     case 'train':
       if (training) {
