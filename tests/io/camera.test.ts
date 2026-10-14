@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Point3 } from '../../src/core/gaze';
-import { CAMERA_START_TIMEOUT_MS, startCamera, type CameraDeps, type CameraFrame } from '../../src/io/camera';
+import {
+  CAMERA_START_TIMEOUT_MS,
+  LANDMARKER_START_TIMEOUT_MS,
+  startCamera,
+  type CameraDeps,
+  type CameraFrame,
+  type CameraSource,
+} from '../../src/io/camera';
 
 // Das echte Paket (WASM) wird in Tests nie geladen; der Standard-Landmarker bekommt diese Attrappe.
 const mp = vi.hoisted(() => ({
@@ -50,6 +57,9 @@ function face(): Point3[] {
   set(152, 0.5, 0.8);
   return lm;
 }
+
+/** Lässt anstehende Versprechen (Promise-Ketten) abarbeiten. */
+const flush = () => new Promise<void>((r) => setTimeout(r, 0));
 
 function fakeStream() {
   const track = { stop: vi.fn() };
@@ -214,14 +224,32 @@ describe('startCamera', () => {
     src.stop();
   });
 
-  it('verweigerter Zugriff (NotAllowedError) → null', async () => {
+  it('ein werfender Abonnent hält die anderen nicht auf', async () => {
+    const h = deps();
+    const src = (await startCamera(h.d))!;
+    const got: CameraFrame[] = [];
+    src.subscribe(() => {
+      throw new Error('Abonnent kaputt');
+    });
+    src.subscribe((f) => got.push(f));
+    for (let i = 1; i <= 3; i++) {
+      src.video().currentTime = i / 30;
+      h.frames.step();
+    }
+    expect(got).toHaveLength(3);
+    expect(h.frames.pendingCount()).toBe(1);
+    src.stop();
+  });
+
+  it('verweigerter Zugriff (NotAllowedError) → null, der parallel erzeugte Landmarker wird geschlossen', async () => {
     const h = deps({
       getUserMedia: vi.fn(async () => {
         throw new DOMException('verweigert', 'NotAllowedError');
       }),
     });
     expect(await startCamera(h.d)).toBeNull();
-    expect(h.d.createLandmarker).not.toHaveBeenCalled();
+    await flush();
+    expect(h.landmarker.close).toHaveBeenCalledTimes(1);
   });
 
   it('Landmarker lässt sich nicht erzeugen → null, Kamera wird freigegeben', async () => {
@@ -231,10 +259,41 @@ describe('startCamera', () => {
       }),
     });
     expect(await startCamera(h.d)).toBeNull();
+    await flush();
     expect(h.track.stop).toHaveBeenCalled();
   });
 
-  it('unbeantwortete Rückfrage: nach CAMERA_START_TIMEOUT_MS null, ein später Strom wird sofort beendet', async () => {
+  it('Landmarker wird parallel zur Rückfrage erzeugt: Zugriff nach 7 s, Landmarker nach 10 s → Start gelingt', async () => {
+    vi.useFakeTimers();
+    const h = deps();
+    let resolveStream: (s: MediaStream) => void = () => undefined;
+    let resolveLm: (l: typeof h.landmarker) => void = () => undefined;
+    const createLandmarker = vi.fn(() => new Promise<typeof h.landmarker>((r) => (resolveLm = r)));
+    const getUserMedia = vi.fn(() => new Promise<MediaStream>((r) => (resolveStream = r)));
+    let result: unknown = 'offen';
+    void startCamera({ ...h.d, getUserMedia, createLandmarker }).then((r) => (result = r));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(createLandmarker).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(7000);
+    const { stream, track } = fakeStream();
+    resolveStream(stream);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(result).toBe('offen');
+    resolveLm(h.landmarker);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result).not.toBeNull();
+    expect(result).not.toBe('offen');
+
+    // Keine Frist schlägt später noch zu.
+    await vi.advanceTimersByTimeAsync(LANDMARKER_START_TIMEOUT_MS);
+    expect(track.stop).not.toHaveBeenCalled();
+    expect(h.landmarker.close).not.toHaveBeenCalled();
+    (result as CameraSource).stop();
+    expect(track.stop).toHaveBeenCalled();
+  });
+
+  it('unbeantwortete Rückfrage: nach CAMERA_START_TIMEOUT_MS null, paralleler Landmarker geschlossen, später Strom sofort beendet', async () => {
     vi.useFakeTimers();
     let resolveLate: (s: MediaStream) => void = () => undefined;
     const late = fakeStream();
@@ -243,23 +302,28 @@ describe('startCamera', () => {
     void startCamera(h.d).then((r) => (result = r));
     await vi.advanceTimersByTimeAsync(CAMERA_START_TIMEOUT_MS - 1);
     expect(result).toBe('offen');
+    expect(h.landmarker.close).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(result).toBeNull();
+    expect(h.landmarker.close).toHaveBeenCalledTimes(1);
 
     resolveLate(late.stream);
     await vi.advanceTimersByTimeAsync(0);
     expect(late.track.stop).toHaveBeenCalled();
-    expect(h.d.createLandmarker).not.toHaveBeenCalled();
+    expect(h.frames.frame).not.toHaveBeenCalled();
   });
 
-  it('Landmarker braucht zu lange: null, Kamera freigegeben, später Landmarker geschlossen', async () => {
+  it('Landmarker wird nie fertig: nach LANDMARKER_START_TIMEOUT_MS null, Kamera freigegeben, später Landmarker geschlossen', async () => {
     vi.useFakeTimers();
     const lateLm = { detect: vi.fn(() => []), close: vi.fn() };
     let resolveLm: (l: typeof lateLm) => void = () => undefined;
     const h = deps({ createLandmarker: vi.fn(() => new Promise<typeof lateLm>((r) => (resolveLm = r))) });
     let result: unknown = 'offen';
     void startCamera(h.d).then((r) => (result = r));
-    await vi.advanceTimersByTimeAsync(CAMERA_START_TIMEOUT_MS);
+    await vi.advanceTimersByTimeAsync(LANDMARKER_START_TIMEOUT_MS - 1);
+    expect(result).toBe('offen');
+    expect(h.track.stop).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
     expect(result).toBeNull();
     expect(h.track.stop).toHaveBeenCalled();
 

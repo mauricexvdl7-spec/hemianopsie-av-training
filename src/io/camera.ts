@@ -5,8 +5,10 @@
  */
 import { featuresFromLandmarks, type GazeFeatures, type Point3 } from '../core/gaze';
 
-/** Länger wartet der Start nicht (z. B. auf eine unbeantwortete Rückfrage); danach läuft das Training ohne Kamera. */
+/** Länger wartet der Start nicht auf die Kamera (z. B. eine unbeantwortete Rückfrage); danach läuft das Training ohne Kamera. */
 export const CAMERA_START_TIMEOUT_MS = 8000;
+/** Obergrenze für den ganzen Start samt Landmarker (WASM und Modell laden, GPU, dann CPU), ab Aufruf gemessen. */
+export const LANDMARKER_START_TIMEOUT_MS = 20000;
 
 /** MediaPipe-Dateien, vom Build nach `public/mediapipe/` gelegt (kein Netz zur Laufzeit). */
 const WASM_BASE_PATH = '/mediapipe/wasm';
@@ -107,20 +109,19 @@ function quietly(fn: () => void): void {
   }
 }
 
-/** Frontkamera (facingMode 'user', 640×480, 30 fps) + Landmarker (GPU, bei Fehler CPU). null bei Verweigerung, Fehler oder nach CAMERA_START_TIMEOUT_MS. Wirft nie. */
+/**
+ * Frontkamera (facingMode 'user', 640×480, 30 fps) + Landmarker (GPU, bei Fehler CPU). Wirft nie.
+ * Der Landmarker wird parallel zur Kamera-Rückfrage erzeugt.
+ * null bei Verweigerung oder Fehler, wenn die Kamera nicht binnen CAMERA_START_TIMEOUT_MS freigegeben ist
+ * oder wenn der Start insgesamt länger als LANDMARKER_START_TIMEOUT_MS dauert.
+ */
 export function startCamera(deps: Partial<CameraDeps> = {}): Promise<CameraSource | null> {
   const d: CameraDeps = { ...defaultDeps, ...deps };
   return new Promise<CameraSource | null>((resolve) => {
     let settled = false;
-    let timer: unknown = null;
-    const finish = (src: CameraSource | null) => {
-      if (settled) return;
-      settled = true;
-      if (timer !== null) quietly(() => d.clearTimeout(timer));
-      resolve(src);
-    };
-
-    // Was nach Ablauf der Frist noch eintrifft, wird sofort wieder freigegeben.
+    const timers: unknown[] = [];
+    let streamArrived = false;
+    // Was nach dem Ende des Starts noch eintrifft, wird sofort wieder freigegeben.
     let stream: MediaStream | null = null;
     let landmarker: FaceLandmarkerLike | null = null;
     let video: HTMLVideoElement | null = null;
@@ -131,39 +132,54 @@ export function startCamera(deps: Partial<CameraDeps> = {}): Promise<CameraSourc
       stream = null;
       landmarker = null;
     };
-
-    const open = async (): Promise<CameraSource | null> => {
-      stream = await d.getUserMedia(CONSTRAINTS);
-      if (settled) return null;
-      video = document.createElement('video');
-      video.muted = true;
-      video.playsInline = true;
-      video.autoplay = true;
-      video.srcObject = stream;
-      await video.play();
-      if (settled) return null;
-      landmarker = await d.createLandmarker();
-      if (settled) return null;
-      return makeSource(d, stream, video, landmarker);
+    /** Beendet den Start; false, wenn er schon beendet war. */
+    const finish = (src: CameraSource | null): boolean => {
+      if (settled) return false;
+      settled = true;
+      for (const t of timers) quietly(() => d.clearTimeout(t));
+      if (!src) release();
+      resolve(src);
+      return true;
     };
 
     try {
-      timer = d.setTimeout(() => {
-        finish(null);
-        release();
-      }, CAMERA_START_TIMEOUT_MS);
-      open().then(
-        (src) => {
-          if (src && !settled) finish(src);
-          else release();
-        },
+      timers.push(
+        d.setTimeout(() => {
+          if (!streamArrived) finish(null);
+        }, CAMERA_START_TIMEOUT_MS),
+        d.setTimeout(() => finish(null), LANDMARKER_START_TIMEOUT_MS),
+      );
+
+      const landmarkerReady = new Promise<FaceLandmarkerLike>((r) => r(d.createLandmarker())).then((lm) => {
+        if (settled) quietly(() => lm.close());
+        else landmarker = lm;
+        return lm;
+      });
+      const cameraReady = (async () => {
+        const s = await d.getUserMedia(CONSTRAINTS);
+        streamArrived = true;
+        if (settled) {
+          quietly(() => stopTracks(s));
+          return;
+        }
+        stream = s;
+        video = document.createElement('video');
+        video.muted = true;
+        video.playsInline = true;
+        video.autoplay = true;
+        video.srcObject = s;
+        await video.play();
+      })();
+
+      Promise.all([cameraReady, landmarkerReady]).then(
         () => {
-          release();
-          finish(null);
+          if (settled || !stream || !video || !landmarker) return;
+          const src = makeSource(d, stream, video, landmarker);
+          if (!finish(src)) src.stop();
         },
+        () => finish(null),
       );
     } catch {
-      release();
       finish(null);
     }
   });
@@ -193,7 +209,13 @@ function makeSource(d: CameraDeps, stream: MediaStream, video: HTMLVideoElement,
     };
     frameTimes.push(tMs);
     while (frameTimes.length > 0 && frameTimes[0]! <= tMs - FPS_WINDOW_MS) frameTimes.shift();
-    for (const cb of [...subscribers]) cb(frame);
+    for (const cb of [...subscribers]) {
+      try {
+        cb(frame);
+      } catch {
+        // Ein fehlerhafter Abnehmer darf die anderen nicht aufhalten.
+      }
+    }
   };
 
   const tick = () => {
