@@ -1,0 +1,232 @@
+/**
+ * Frontkamera + MediaPipe Face Landmarker als Strom von Blickmerkmalen.
+ * Datenschutz: Kein Bild wird gespeichert oder übertragen; nach außen gehen nur Zahlen.
+ * Das Videoelement gibt es nur für Testseite und Einrichtung (Vorschau für den Angehörigen).
+ */
+import { featuresFromLandmarks, type GazeFeatures, type Point3 } from '../core/gaze';
+
+/** Länger wartet der Start nicht (z. B. auf eine unbeantwortete Rückfrage); danach läuft das Training ohne Kamera. */
+export const CAMERA_START_TIMEOUT_MS = 8000;
+
+/** MediaPipe-Dateien, vom Build nach `public/mediapipe/` gelegt (kein Netz zur Laufzeit). */
+const WASM_BASE_PATH = '/mediapipe/wasm';
+const MODEL_PATH = '/mediapipe/face_landmarker.task';
+/** Index der Nasenspitze in den MediaPipe-Gesichtspunkten. */
+const NOSE_TIP = 1;
+/** Zeitfenster für die Bildrate. */
+const FPS_WINDOW_MS = 1000;
+
+export interface CameraFrame {
+  tMs: number;
+  features: GazeFeatures | null;
+  /** Nasenspitze relativ zum Bild 0..1 (ungespiegelt); null ohne Gesicht. */
+  facePx: { x: number; y: number } | null;
+}
+
+export interface CameraSource {
+  /** Ruft cb je verarbeitetem Bild auf; liefert Abmeldefunktion. */
+  subscribe(cb: (f: CameraFrame) => void): () => void;
+  /** Für Testseite/Einrichtung: Videoelement (nie auf Patientenbildschirmen einhängen). */
+  video(): HTMLVideoElement;
+  /** Verarbeitete Bilder in der letzten Sekunde. */
+  fps(): number;
+  /** Beendet Bildtakt, Kamera und Landmarker; mehrfach aufrufbar. */
+  stop(): void;
+}
+
+export interface FaceLandmarkerLike {
+  /** Gesichter im Bild, je Gesicht die normierten Punkte (x, y in 0..1). */
+  detect(video: HTMLVideoElement, tMs: number): readonly (readonly Point3[])[];
+  close(): void;
+}
+
+export interface CameraDeps {
+  getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
+  createLandmarker(): Promise<FaceLandmarkerLike>;
+  now(): number;
+  frame(cb: () => void): number;
+  cancelFrame(id: number): void;
+  setTimeout(cb: () => void, ms: number): unknown;
+  clearTimeout(id: unknown): void;
+}
+
+const CONSTRAINTS: MediaStreamConstraints = {
+  audio: false,
+  video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+};
+
+/**
+ * Lädt MediaPipe erst bei Bedarf (Tests und Seiten ohne Kamera laden das WASM-Paket nie).
+ * Versucht zuerst die GPU, bei Fehler die CPU.
+ */
+async function createDefaultLandmarker(): Promise<FaceLandmarkerLike> {
+  const { FilesetResolver, FaceLandmarker } = await import('@mediapipe/tasks-vision');
+  const fileset = await FilesetResolver.forVisionTasks(WASM_BASE_PATH);
+  const open = (delegate: 'GPU' | 'CPU') =>
+    FaceLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_PATH, delegate },
+      runningMode: 'VIDEO',
+      numFaces: 1,
+    });
+  let lm: Awaited<ReturnType<typeof open>>;
+  try {
+    lm = await open('GPU');
+  } catch {
+    lm = await open('CPU');
+  }
+  // MediaPipe verlangt streng steigende Zeitstempel im Videomodus.
+  let lastTs = -Infinity;
+  return {
+    detect(video, tMs) {
+      const ts = Math.max(tMs, lastTs + 1);
+      lastTs = ts;
+      return lm.detectForVideo(video, ts).faceLandmarks;
+    },
+    close: () => lm.close(),
+  };
+}
+
+const defaultDeps: CameraDeps = {
+  getUserMedia: (c) => navigator.mediaDevices.getUserMedia(c),
+  createLandmarker: createDefaultLandmarker,
+  now: () => performance.now(),
+  frame: (cb) => requestAnimationFrame(() => cb()),
+  cancelFrame: (id) => cancelAnimationFrame(id),
+  setTimeout: (cb, ms) => globalThis.setTimeout(cb, ms),
+  clearTimeout: (id) => globalThis.clearTimeout(id as ReturnType<typeof globalThis.setTimeout>),
+};
+
+const stopTracks = (s: MediaStream) => s.getTracks().forEach((t) => t.stop());
+
+/** Ignoriert Fehler beim Aufräumen: Freigeben darf den Ablauf nie aufhalten. */
+function quietly(fn: () => void): void {
+  try {
+    fn();
+  } catch {
+    // bereits freigegeben oder nicht unterstützt
+  }
+}
+
+/** Frontkamera (facingMode 'user', 640×480, 30 fps) + Landmarker (GPU, bei Fehler CPU). null bei Verweigerung, Fehler oder nach CAMERA_START_TIMEOUT_MS. Wirft nie. */
+export function startCamera(deps: Partial<CameraDeps> = {}): Promise<CameraSource | null> {
+  const d: CameraDeps = { ...defaultDeps, ...deps };
+  return new Promise<CameraSource | null>((resolve) => {
+    let settled = false;
+    let timer: unknown = null;
+    const finish = (src: CameraSource | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) quietly(() => d.clearTimeout(timer));
+      resolve(src);
+    };
+
+    // Was nach Ablauf der Frist noch eintrifft, wird sofort wieder freigegeben.
+    let stream: MediaStream | null = null;
+    let landmarker: FaceLandmarkerLike | null = null;
+    let video: HTMLVideoElement | null = null;
+    const release = () => {
+      if (stream) quietly(() => stopTracks(stream!));
+      if (landmarker) quietly(() => landmarker!.close());
+      if (video) quietly(() => (video!.srcObject = null));
+      stream = null;
+      landmarker = null;
+    };
+
+    const open = async (): Promise<CameraSource | null> => {
+      stream = await d.getUserMedia(CONSTRAINTS);
+      if (settled) return null;
+      video = document.createElement('video');
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
+      video.srcObject = stream;
+      await video.play();
+      if (settled) return null;
+      landmarker = await d.createLandmarker();
+      if (settled) return null;
+      return makeSource(d, stream, video, landmarker);
+    };
+
+    try {
+      timer = d.setTimeout(() => {
+        finish(null);
+        release();
+      }, CAMERA_START_TIMEOUT_MS);
+      open().then(
+        (src) => {
+          if (src && !settled) finish(src);
+          else release();
+        },
+        () => {
+          release();
+          finish(null);
+        },
+      );
+    } catch {
+      release();
+      finish(null);
+    }
+  });
+}
+
+function makeSource(d: CameraDeps, stream: MediaStream, video: HTMLVideoElement, landmarker: FaceLandmarkerLike): CameraSource {
+  const subscribers = new Set<(f: CameraFrame) => void>();
+  const frameTimes: number[] = [];
+  let lastVideoTime = video.currentTime;
+  let rafId: number | null = null;
+  let stopped = false;
+
+  const process = () => {
+    const tMs = d.now();
+    let faces: readonly (readonly Point3[])[] = [];
+    try {
+      faces = landmarker.detect(video, tMs);
+    } catch {
+      // Ein misslungenes Bild zählt als Bild ohne Gesicht.
+    }
+    const lm = faces[0];
+    const nose = lm?.[NOSE_TIP];
+    const frame: CameraFrame = {
+      tMs,
+      features: lm ? featuresFromLandmarks(lm) : null,
+      facePx: nose ? { x: nose.x, y: nose.y } : null,
+    };
+    frameTimes.push(tMs);
+    while (frameTimes.length > 0 && frameTimes[0]! <= tMs - FPS_WINDOW_MS) frameTimes.shift();
+    for (const cb of [...subscribers]) cb(frame);
+  };
+
+  const tick = () => {
+    if (stopped) return;
+    rafId = d.frame(tick);
+    // Nur neue Videobilder auswerten (der Bildschirm läuft oft schneller als die Kamera).
+    const vt = video.currentTime;
+    if (vt === lastVideoTime) return;
+    lastVideoTime = vt;
+    process();
+  };
+  rafId = d.frame(tick);
+
+  return {
+    subscribe(cb) {
+      subscribers.add(cb);
+      return () => void subscribers.delete(cb);
+    },
+    video: () => video,
+    fps() {
+      const now = d.now();
+      return frameTimes.filter((t) => t > now - FPS_WINDOW_MS).length;
+    },
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      subscribers.clear();
+      if (rafId !== null) quietly(() => d.cancelFrame(rafId!));
+      rafId = null;
+      quietly(() => stopTracks(stream));
+      quietly(() => landmarker.close());
+      quietly(() => video.pause());
+      quietly(() => (video.srcObject = null));
+    },
+  };
+}

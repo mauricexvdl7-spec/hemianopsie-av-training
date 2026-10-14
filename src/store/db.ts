@@ -21,6 +21,34 @@ export interface PinRecord {
   hashHex: string;
 }
 
+/** Lage der Frontkamera: seitlich (älteres iPad, Kamera rechts) oder oben mittig (neueres iPad). */
+export type CameraPlacement = 'side' | 'top';
+
+export interface CameraSettings {
+  /** Kamera im Training nutzen; standardmäßig aus. */
+  enabled: boolean;
+  placement: CameraPlacement;
+  /** Geschwindigkeitsschwelle für den Beginn eines Blicksprungs in °/s. */
+  saccadeThresholdDegPerS: number;
+}
+
+export const DEFAULT_CAMERA_SETTINGS: CameraSettings = { enabled: false, placement: 'side', saccadeThresholdDegPerS: 80 };
+export const SACCADE_THRESHOLD_LIMITS = { min: 40, max: 200 } as const;
+
+/** Ergänzt fehlende oder ungültige Kamera-Felder je Feld mit Standardwerten und begrenzt die Schwelle auf 40–200 °/s. */
+function normalizeCamera(c: Partial<CameraSettings> | undefined): CameraSettings {
+  const d = DEFAULT_CAMERA_SETTINGS;
+  const t = c?.saccadeThresholdDegPerS;
+  return {
+    enabled: typeof c?.enabled === 'boolean' ? c.enabled : d.enabled,
+    placement: c?.placement === 'side' || c?.placement === 'top' ? c.placement : d.placement,
+    saccadeThresholdDegPerS:
+      typeof t === 'number' && Number.isFinite(t)
+        ? Math.min(SACCADE_THRESHOLD_LIMITS.max, Math.max(SACCADE_THRESHOLD_LIMITS.min, t))
+        : d.saccadeThresholdDegPerS,
+  };
+}
+
 export interface Settings {
   disclaimerAcceptedAt: string | null;
   geometry: GeometryInput | null;
@@ -41,6 +69,8 @@ export interface Settings {
   lastExportAtIso: string | null;
   /** Raster der Messpunkte; bei alten Einstellungen fehlend (beim Lesen Standard). */
   grid: GridConfig;
+  /** Frontkamera; bei alten Einstellungen fehlend (beim Lesen Standard: aus). */
+  camera: CameraSettings;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -56,9 +86,10 @@ export const DEFAULT_SETTINGS: Settings = {
   announcements: {},
   lastExportAtIso: null,
   grid: DEFAULT_GRID,
+  camera: DEFAULT_CAMERA_SETTINGS,
 };
 
-/** Füllt fehlende Felder mit Standardwerten (je Feld, auch in `timing` und `grid`) und begrenzt Werte. */
+/** Füllt fehlende Felder mit Standardwerten (je Feld, auch in `timing`, `grid` und `camera`) und begrenzt Werte. */
 export function normalizeSettings(s: Partial<Settings> | undefined): Settings {
   if (!s) return structuredClone(DEFAULT_SETTINGS);
   return {
@@ -70,6 +101,7 @@ export function normalizeSettings(s: Partial<Settings> | undefined): Settings {
     announcements: { ...(s.announcements ?? {}) },
     pin: s.pin ?? null,
     lastExportAtIso: s.lastExportAtIso ?? null,
+    camera: normalizeCamera(s.camera),
   };
 }
 
@@ -93,6 +125,8 @@ export interface SessionRecord {
   summary?: SessionSummary | null;
   /** Trainingsstufe der Sitzung; bei Datensätzen aus Version 1 fehlend (beim Lesen null). */
   stage?: Stage | null;
+  /** Kamera der Sitzung (Restfehler der Kalibrierung, genutzt ja/nein); null ohne Kamera, bei älteren Datensätzen fehlend (beim Lesen null). */
+  camera?: { residualDeg: number; used: boolean } | null;
 }
 
 /** Momentaufnahme der Schwellen-Karte; je Sitzung und Anlass höchstens eine (Schlüssel `id`). */
@@ -153,8 +187,13 @@ const CONTROLLER_KEY = 'main';
 /** Speicher, die `replaceAll` ersetzt (ohne `recordings`: Aufnahmen gehören dem Gerät). */
 const STORES = ['settings', 'sessions', 'trials', 'controller', 'mapSnapshots'] as const;
 
-/** Füllt Felder, die es in Version 1 noch nicht gab, mit null. */
-const withSessionDefaults = (s: SessionRecord): SessionRecord => ({ ...s, summary: s.summary ?? null, stage: s.stage ?? null });
+/** Füllt Felder, die es in älteren Datensätzen noch nicht gab, mit null. */
+const withSessionDefaults = (s: SessionRecord): SessionRecord => ({
+  ...s,
+  summary: s.summary ?? null,
+  stage: s.stage ?? null,
+  camera: s.camera ?? null,
+});
 
 export async function openDb(name: string = DB_NAME): Promise<Db> {
   const idb: IDBPDatabase = await openDB(name, DB_VERSION, {

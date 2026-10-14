@@ -5,3 +5,4 @@ dev-dist/
 exports/
 .work/
 .superpowers/
+public/mediapipe/

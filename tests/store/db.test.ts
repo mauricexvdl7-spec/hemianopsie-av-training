@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_TIMING } from '../../src/core/timing';
-import { openDb, DEFAULT_SETTINGS, type MapSnapshot, type SessionRecord } from '../../src/store/db';
+import { openDb, DEFAULT_SETTINGS, DEFAULT_CAMERA_SETTINGS, SACCADE_THRESHOLD_LIMITS, type MapSnapshot, type SessionRecord } from '../../src/store/db';
 import { makeGeometry } from '../../src/core/geometry';
 import { createControllerState } from '../../src/core/controller';
 import { DEFAULT_GRID } from '../../src/core/blocks';
@@ -278,5 +278,49 @@ describe('MapSnapshot.guess', () => {
     await db.addMapSnapshot({ ...snapshot('s1'), guess });
     const [m] = await db.listMapSnapshots();
     expect(m!.guess).toEqual(guess);
+  });
+});
+
+describe('Settings.camera und SessionRecord.camera', () => {
+  it('Standard: aus, seitlich, 80 °/s; Grenzen 40–200', () => {
+    expect(DEFAULT_CAMERA_SETTINGS).toEqual({ enabled: false, placement: 'side', saccadeThresholdDegPerS: 80 });
+    expect(SACCADE_THRESHOLD_LIMITS).toEqual({ min: 40, max: 200 });
+    expect(DEFAULT_SETTINGS.camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+  });
+
+  it('alte Einstellungen ohne camera bekommen DEFAULT_CAMERA_SETTINGS', async () => {
+    const db = await freshDb();
+    const { camera: _c, ...old } = DEFAULT_SETTINGS;
+    await db.saveSettings(old as typeof DEFAULT_SETTINGS);
+    expect((await db.getSettings()).camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+  });
+
+  it('Schwelle wird auf 40–200 begrenzt, fehlende Felder je Feld ergänzt', async () => {
+    const db = await freshDb();
+    await db.saveSettings({ ...DEFAULT_SETTINGS, camera: { enabled: true, placement: 'top', saccadeThresholdDegPerS: 500 } });
+    expect((await db.getSettings()).camera).toEqual({ enabled: true, placement: 'top', saccadeThresholdDegPerS: 200 });
+    await db.saveSettings({ ...DEFAULT_SETTINGS, camera: { saccadeThresholdDegPerS: 10 } as typeof DEFAULT_CAMERA_SETTINGS });
+    expect((await db.getSettings()).camera).toEqual({ ...DEFAULT_CAMERA_SETTINGS, saccadeThresholdDegPerS: 40 });
+    await db.saveSettings({
+      ...DEFAULT_SETTINGS,
+      camera: { enabled: 'ja', placement: 'unten', saccadeThresholdDegPerS: Number.NaN } as unknown as typeof DEFAULT_CAMERA_SETTINGS,
+    });
+    expect((await db.getSettings()).camera).toEqual(DEFAULT_CAMERA_SETTINGS);
+  });
+
+  it('gültige Kamera-Einstellungen bleiben unverändert', async () => {
+    const db = await freshDb();
+    const s = { ...DEFAULT_SETTINGS, camera: { enabled: true, placement: 'top' as const, saccadeThresholdDegPerS: 120 } };
+    await db.saveSettings(s);
+    expect(await db.getSettings()).toEqual(s);
+  });
+
+  it('Sitzung mit camera geht verlustfrei durch, alte Sitzung ohne camera liest sich als null', async () => {
+    const db = await freshDb();
+    await db.addSession({ ...session('s1'), camera: { residualDeg: 2.75, used: true } });
+    await db.addSession(session('s2'));
+    const byId = new Map((await db.listSessions()).map((s) => [s.id, s]));
+    expect(byId.get('s1')!.camera).toEqual({ residualDeg: 2.75, used: true });
+    expect(byId.get('s2')!.camera).toBeNull();
   });
 });
