@@ -8,6 +8,8 @@ import {
   mapGaze,
   robustMean,
   CALIB_MAX_RESIDUAL_DEG,
+  CALIB_MIN_SAMPLES_PER_POINT,
+  HEAD_TERM_MIN_SPREAD,
   type Point3,
   type CalibSample,
   type GazeFeatures,
@@ -269,6 +271,89 @@ describe('fitGazeModel', () => {
     expect(r.model).toBeNull();
     expect(r.residualDeg).toBe(Infinity);
     expect(fitGazeModel([]).usable).toBe(false);
+  });
+
+  it('nur 4 Zielpunkte → unbrauchbar (Kalibrierung unvollständig)', () => {
+    const last = points[4]!;
+    const samples = synthSamples(0.005, 3).filter(
+      (s) => !(s.targetXDeg === last.xDeg && s.targetYDeg === last.yDeg),
+    );
+    const r = fitGazeModel(samples);
+    expect(r.usable).toBe(false);
+    expect(r.model).toBeNull();
+    expect(r.residualDeg).toBe(Infinity);
+  });
+
+  it('5 Zielpunkte, aber einer mit nur 6 Proben → unbrauchbar', () => {
+    expect(CALIB_MIN_SAMPLES_PER_POINT).toBe(10);
+    const thin = points[2]!;
+    let n = 0;
+    const samples = synthSamples(0.005, 3).filter(
+      (s) => !(s.targetXDeg === thin.xDeg && s.targetYDeg === thin.yDeg) || n++ < 6,
+    );
+    expect(samples.length).toBe(4 * 30 + 6);
+    const r = fitGazeModel(samples);
+    expect(r.usable).toBe(false);
+    expect(r.model).toBeNull();
+    expect(r.residualDeg).toBe(Infinity);
+  });
+
+  it('Ergebnis ohne Modell ist je Aufruf ein eigenes Objekt', () => {
+    const a = fitGazeModel([]);
+    a.usable = true;
+    a.residualDeg = 0;
+    const b = fitGazeModel([]);
+    expect(b).not.toBe(a);
+    expect(b.usable).toBe(false);
+    expect(b.residualDeg).toBe(Infinity);
+  });
+
+  it('Kopf still (yaw nur Zittern σ 1e-3) → Kopfterm b = 0, Abbildung trotzdem auf 0,5° genau', () => {
+    expect(HEAD_TERM_MIN_SPREAD).toBeGreaterThan(0);
+    const rng = createRng(4321);
+    const YAW_STILL = 0.02;
+    const samples: CalibSample[] = [];
+    const exact: GazeFeatures[] = [];
+    points.forEach((p, i) => {
+      const pitch = PITCH[i]!;
+      const f: GazeFeatures = {
+        irisX: (p.xDeg - TRUE.ax[2] - TRUE.ax[1] * YAW_STILL) / TRUE.ax[0],
+        irisY: (p.yDeg - TRUE.ay[2] - TRUE.ay[1] * pitch) / TRUE.ay[0],
+        yaw: YAW_STILL,
+        pitch,
+      };
+      exact.push(f);
+      for (let k = 0; k < 30; k++) {
+        samples.push({
+          targetXDeg: p.xDeg,
+          targetYDeg: p.yDeg,
+          features: {
+            irisX: f.irisX + 0.005 * gauss(rng),
+            irisY: f.irisY + 0.005 * gauss(rng),
+            yaw: YAW_STILL + 1e-3 * gauss(rng),
+            pitch,
+          },
+        });
+      }
+    });
+    const r = fitGazeModel(samples);
+    expect(r.usable).toBe(true);
+    const m = r.model!;
+    expect(m.ax[1]).toBe(0);
+    // y-Achse unabhängig: Neigung variiert, e wird weiter geschätzt
+    expect(Math.abs(m.ay[1] - TRUE.ay[1])).toBeLessThan(0.01 * Math.hypot(...TRUE.ay));
+    points.forEach((p, i) => {
+      const q = mapGaze(m, exact[i]!);
+      expect(Math.hypot(q.xDeg - p.xDeg, q.yDeg - p.yDeg)).toBeLessThan(0.5);
+    });
+  });
+
+  it('natürliche Kopfbewegung (gut konditioniert) → b und e werden geschätzt', () => {
+    const m = fitGazeModel(synthSamples(0.005, 1234)).model!;
+    expect(m.ax[1]).not.toBe(0);
+    expect(m.ay[1]).not.toBe(0);
+    expect(Math.abs(m.ax[1] - TRUE.ax[1])).toBeLessThan(0.01 * Math.hypot(...TRUE.ax));
+    expect(Math.abs(m.ay[1] - TRUE.ay[1])).toBeLessThan(0.01 * Math.hypot(...TRUE.ay));
   });
 
   it('einzelne Ausreißer-Proben stören den Fit nicht', () => {

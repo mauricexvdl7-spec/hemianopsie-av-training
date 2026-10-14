@@ -116,13 +116,40 @@ export interface CalibResult {
 
 export const CALIB_MAX_RESIDUAL_DEG = 5;
 
+/** Eine Kalibrierung braucht alle 5 Zielpunkte aus `calibrationPoints`. */
+const CALIB_TARGET_COUNT = 5;
+
+/** Mindestzahl Proben je Zielpunkt nach dem Ausreißerfilter (das knappste Merkmal zählt). */
+export const CALIB_MIN_SAMPLES_PER_POINT = 10;
+
+/**
+ * Mindest-Spannweite (max − min) der mittleren Kopfdrehung bzw. -neigung über die Zielpunkte,
+ * damit der Kopfterm (b bzw. e) mitgeschätzt wird. Darunter wird die Achse mit 2 Parametern
+ * gefittet (b bzw. e = 0).
+ *
+ * Begründung für 0,01: Die Nasenspitze liegt etwa eine halbe Gesichtsbreite vor der Ebene der
+ * Gesichtsränder, yaw ändert sich also um etwa 0,5·sin(θ) ≈ 0,009 je Grad Kopfdrehung; pitch
+ * (bezogen auf die größere Gesichtshöhe) etwa halb so stark. 0,01 entspricht damit etwa 1° Drehung
+ * bzw. 2° Neigung. Das Zittern der Gesichtspunkte (etwa 1 px bei rund 200 px Gesichtsbreite, also
+ * ≈ 0,005 je Bild) mittelt sich über die etwa 30 Bilder je Punkt auf ≈ 0,001 herunter und bleibt
+ * deutlich darunter. Wer den Blick über ±15–25° mit leichter natürlicher Kopfbewegung folgt,
+ * liegt deutlich darüber. Ohne diese Schranke würde b/e bei ruhigem Kopf nur Rauschen anpassen und
+ * später echte Kopfbewegungen stark verstärken.
+ */
+export const HEAD_TERM_MIN_SPREAD = 0.01;
+
 /** Mittel nach Ausreißerfilter: nur Werte innerhalb Median ± 3·MAD. [] → NaN, NaN im Eingang → NaN. */
 export function robustMean(values: readonly number[]): number {
-  if (values.length === 0 || values.some((v) => Number.isNaN(v))) return Number.NaN;
+  const kept = robustFilter(values);
+  return kept.length === 0 ? Number.NaN : kept.reduce((s, v) => s + v, 0) / kept.length;
+}
+
+/** Werte innerhalb Median ± 3·MAD; [] bei leerem Eingang oder NaN. */
+function robustFilter(values: readonly number[]): number[] {
+  if (values.length === 0 || values.some((v) => Number.isNaN(v))) return [];
   const med = median(values);
   const mad = median(values.map((v) => Math.abs(v - med)));
-  const kept = values.filter((v) => Math.abs(v - med) <= 3 * mad);
-  return kept.reduce((s, v) => s + v, 0) / kept.length;
+  return values.filter((v) => Math.abs(v - med) <= 3 * mad);
 }
 
 function median(values: readonly number[]): number {
@@ -132,59 +159,71 @@ function median(values: readonly number[]): number {
 }
 
 /**
- * Löst das 3×3-System M·x = v (Gauß mit Spaltenpivot).
+ * Löst das n×n-System M·x = v (Gauß mit Spaltenpivot).
  * null, wenn die Matrix (relativ zu ihrer Größe) singulär ist.
  */
-function solve3(m: number[][], v: number[]): [number, number, number] | null {
+function solveLinear(m: readonly (readonly number[])[], v: readonly number[]): number[] | null {
+  const n = v.length;
   const a = m.map((row, i) => [...row, v[i]!]);
-  const scale = Math.max(...a.flatMap((row) => row.slice(0, 3).map(Math.abs)));
+  const scale = Math.max(...a.flatMap((row) => row.slice(0, n).map(Math.abs)));
   if (!(scale > 0)) return null;
-  for (let c = 0; c < 3; c++) {
+  for (let c = 0; c < n; c++) {
     let p = c;
-    for (let r = c + 1; r < 3; r++) if (Math.abs(a[r]![c]!) > Math.abs(a[p]![c]!)) p = r;
+    for (let r = c + 1; r < n; r++) if (Math.abs(a[r]![c]!) > Math.abs(a[p]![c]!)) p = r;
     if (!(Math.abs(a[p]![c]!) > 1e-10 * scale)) return null;
     [a[c], a[p]] = [a[p]!, a[c]!];
     const pivotRow = a[c]!;
-    for (let r = c + 1; r < 3; r++) {
+    for (let r = c + 1; r < n; r++) {
       const row = a[r]!;
       const k = row[c]! / pivotRow[c]!;
-      for (let j = c; j < 4; j++) row[j] = row[j]! - k * pivotRow[j]!;
+      for (let j = c; j <= n; j++) row[j] = row[j]! - k * pivotRow[j]!;
     }
   }
-  const x = [0, 0, 0];
-  for (let r = 2; r >= 0; r--) {
+  const x = new Array<number>(n).fill(0);
+  for (let r = n - 1; r >= 0; r--) {
     const row = a[r]!;
-    let s = row[3]!;
-    for (let j = r + 1; j < 3; j++) s -= row[j]! * x[j]!;
+    let s = row[n]!;
+    for (let j = r + 1; j < n; j++) s -= row[j]! * x[j]!;
     x[r] = s / row[r]!;
   }
-  return [x[0]!, x[1]!, x[2]!];
+  return x;
 }
 
-/** Kleinste Quadrate für target ≈ p·u + q·w + r über die Normalgleichungen. */
-function fitAxis(u: readonly number[], w: readonly number[], target: readonly number[]): [number, number, number] | null {
-  const m = [
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0],
-  ];
-  const v = [0, 0, 0];
-  for (let i = 0; i < target.length; i++) {
-    const row = [u[i]!, w[i]!, 1];
-    for (let j = 0; j < 3; j++) {
+/**
+ * Kleinste Quadrate für target ≈ p·iris + q·head + r über die Normalgleichungen.
+ * Ist die Spannweite von head kleiner als HEAD_TERM_MIN_SPREAD, wird q = 0 gesetzt (2 Parameter).
+ */
+function fitAxis(
+  iris: readonly number[],
+  head: readonly number[],
+  target: readonly number[],
+): [number, number, number] | null {
+  const useHead = Math.max(...head) - Math.min(...head) >= HEAD_TERM_MIN_SPREAD;
+  const rows = target.map((_, i) => (useHead ? [iris[i]!, head[i]!, 1] : [iris[i]!, 1]));
+  const n = useHead ? 3 : 2;
+  const m = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  const v = new Array<number>(n).fill(0);
+  rows.forEach((row, i) => {
+    for (let j = 0; j < n; j++) {
       v[j] = v[j]! + row[j]! * target[i]!;
-      for (let k = 0; k < 3; k++) m[j]![k] = m[j]![k]! + row[j]! * row[k]!;
+      for (let k = 0; k < n; k++) m[j]![k] = m[j]![k]! + row[j]! * row[k]!;
     }
-  }
-  return solve3(m, v);
+  });
+  const x = solveLinear(m, v);
+  if (!x) return null;
+  return useHead ? [x[0]!, x[1]!, x[2]!] : [x[0]!, 0, x[1]!];
 }
 
-const UNUSABLE: CalibResult = { model: null, residualDeg: Infinity, usable: false };
+function unusable(): CalibResult {
+  return { model: null, residualDeg: Infinity, usable: false };
+}
 
 /**
  * Kleinste Quadrate je Achse über die robusten Mittel je Zielpunkt.
  * Restfehler = RMS der Abstände zwischen Zielpunkt und abgebildetem Mittel, in Grad.
- * Bei singulärer Matrix, NaN oder < 3 Zielpunkten: model null, usable false, residualDeg Infinity.
+ * Unbrauchbar (model null, usable false, residualDeg Infinity) bei singulärer Matrix, NaN,
+ * nicht genau 5 Zielpunkten oder weniger als CALIB_MIN_SAMPLES_PER_POINT Proben je Punkt
+ * nach dem Ausreißerfilter.
  */
 export function fitGazeModel(samples: readonly CalibSample[]): CalibResult {
   const groups = new Map<string, CalibSample[]>();
@@ -194,20 +233,29 @@ export function fitGazeModel(samples: readonly CalibSample[]): CalibResult {
     if (list) list.push(s);
     else groups.set(key, [s]);
   }
-  if (groups.size < 3) return UNUSABLE;
+  if (groups.size !== CALIB_TARGET_COUNT) return unusable();
 
   const targets: { x: number; y: number }[] = [];
   const means: GazeFeatures[] = [];
   for (const list of groups.values()) {
     const first = list[0]!;
+    const kept = {
+      irisX: robustFilter(list.map((s) => s.features.irisX)),
+      irisY: robustFilter(list.map((s) => s.features.irisY)),
+      yaw: robustFilter(list.map((s) => s.features.yaw)),
+      pitch: robustFilter(list.map((s) => s.features.pitch)),
+    };
+    const fewest = Math.min(kept.irisX.length, kept.irisY.length, kept.yaw.length, kept.pitch.length);
+    if (fewest < CALIB_MIN_SAMPLES_PER_POINT) return unusable();
+    const mean = (xs: number[]) => xs.reduce((s, v) => s + v, 0) / xs.length;
     const f: GazeFeatures = {
-      irisX: robustMean(list.map((s) => s.features.irisX)),
-      irisY: robustMean(list.map((s) => s.features.irisY)),
-      yaw: robustMean(list.map((s) => s.features.yaw)),
-      pitch: robustMean(list.map((s) => s.features.pitch)),
+      irisX: mean(kept.irisX),
+      irisY: mean(kept.irisY),
+      yaw: mean(kept.yaw),
+      pitch: mean(kept.pitch),
     };
     if (![first.targetXDeg, first.targetYDeg, f.irisX, f.irisY, f.yaw, f.pitch].every(Number.isFinite)) {
-      return UNUSABLE;
+      return unusable();
     }
     targets.push({ x: first.targetXDeg, y: first.targetYDeg });
     means.push(f);
@@ -223,7 +271,7 @@ export function fitGazeModel(samples: readonly CalibSample[]): CalibResult {
     means.map((f) => f.pitch),
     targets.map((t) => t.y),
   );
-  if (!ax || !ay || ![...ax, ...ay].every(Number.isFinite)) return UNUSABLE;
+  if (!ax || !ay || ![...ax, ...ay].every(Number.isFinite)) return unusable();
 
   const model: GazeModel = { ax, ay };
   let sq = 0;
@@ -233,7 +281,7 @@ export function fitGazeModel(samples: readonly CalibSample[]): CalibResult {
     sq += (q.xDeg - t.x) ** 2 + (q.yDeg - t.y) ** 2;
   });
   const residualDeg = Math.sqrt(sq / means.length);
-  if (!Number.isFinite(residualDeg)) return UNUSABLE;
+  if (!Number.isFinite(residualDeg)) return unusable();
   return { model, residualDeg, usable: residualDeg <= CALIB_MAX_RESIDUAL_DEG };
 }
 
