@@ -20,6 +20,7 @@ import { TrainingScreen } from './patient/TrainingScreen';
 import { resolveRoute } from './routing';
 import { SetupWizard } from './setup/SetupWizard';
 import { unlockAudio } from './unlockAudio';
+import { enterFullscreen } from './fullscreen';
 
 export function App() {
   const audio = useMemo(() => new AudioEngine(), []);
@@ -140,6 +141,8 @@ export function App() {
             // Audio, Stimme und Bildschirmsperre nur innerhalb einer Berührung freischalten (iOS)
             unlockAudio(audio);
             voice.unlock();
+            // Am PC: Vollbild, damit das Fenster so groß ist wie bei der Einrichtung
+            enterFullscreen();
             void (navigator as Navigator & { wakeLock?: { request(t: 'screen'): Promise<unknown> } }).wakeLock
               ?.request('screen')
               .catch(() => undefined);

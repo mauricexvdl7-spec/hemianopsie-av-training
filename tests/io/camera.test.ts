@@ -125,7 +125,7 @@ afterEach(() => {
 });
 
 describe('startCamera', () => {
-  it('fragt die Frontkamera mit 640×480 und 30 fps an', async () => {
+  it('fragt die Frontkamera mit 1280×720 und 30 fps an (Webcam am PC, 70 cm Abstand)', async () => {
     const getUserMedia = vi.fn(async (_c: MediaStreamConstraints) => fakeStream().stream);
     const src = await startCamera(deps({ getUserMedia }).d);
     expect(src).not.toBeNull();
@@ -133,8 +133,8 @@ describe('startCamera', () => {
     const video = c.video as MediaTrackConstraints;
     expect(c.audio).toBe(false);
     expect(video.facingMode).toBe('user');
-    expect(video.width).toEqual({ ideal: 640 });
-    expect(video.height).toEqual({ ideal: 480 });
+    expect(video.width).toEqual({ ideal: 1280 });
+    expect(video.height).toEqual({ ideal: 720 });
     expect(video.frameRate).toEqual({ ideal: 30 });
     src!.stop();
   });

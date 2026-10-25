@@ -54,7 +54,7 @@ export interface CameraDeps {
 
 const CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
-  video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 30 } },
+  video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
 };
 
 /**
@@ -110,7 +110,7 @@ function quietly(fn: () => void): void {
 }
 
 /**
- * Frontkamera (facingMode 'user', 640×480, 30 fps) + Landmarker (GPU, bei Fehler CPU). Wirft nie.
+ * Frontkamera bzw. Webcam (facingMode 'user', 1280×720, 30 fps; bei 70 cm Abstand am PC ist das Gesicht sonst zu klein) + Landmarker (GPU, bei Fehler CPU). Wirft nie.
  * Der Landmarker wird parallel zur Kamera-Rückfrage erzeugt.
  * null bei Verweigerung oder Fehler, wenn die Kamera nicht binnen CAMERA_START_TIMEOUT_MS freigegeben ist
  * oder wenn der Start insgesamt länger als LANDMARKER_START_TIMEOUT_MS dauert.

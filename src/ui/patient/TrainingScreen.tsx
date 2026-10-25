@@ -15,6 +15,7 @@ import type { Db, Settings } from '../../store/db';
 import { planningGeometry } from '../browserDeps';
 import { dayKey, newId, startTrainingSession, type TrainingSession } from '../session';
 import { TrialStage } from '../TrialStage';
+import { enterFullscreen } from '../fullscreen';
 import { FixationScreen } from './FixationScreen';
 import { unlockAudio } from '../unlockAudio';
 import { viewportMatches } from '../validate';
@@ -237,6 +238,8 @@ export function TrainingScreen(props: {
         class="patient screen overlay-message"
         onClick={() => {
           unlockAudio(props.audio);
+          // Am PC nach Esc: Tippen holt das Vollbild zurück, das nächste Tippen macht weiter
+          enterFullscreen();
           dispatch({ type: 'tap', nowMs: now(), windowOk: windowOk() });
         }}
       >

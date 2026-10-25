@@ -4,6 +4,8 @@ import { maxEccentricityDeg, type GeometryInput } from '../../../core/geometry';
 import { currentGeometry, isLandscape } from '../../browserDeps';
 import { geometryProblems, parseCm } from '../../validate';
 
+import { canFullscreen, enterFullscreen } from '../../fullscreen';
+
 export function GeometryStep(props: { initial: GeometryInput; onNext(g: GeometryInput): void }) {
   const [width, setWidth] = useState(String(props.initial.screenWidthCm).replace('.', ','));
   const [dist, setDist] = useState(String(props.initial.viewingDistanceCm).replace('.', ','));
@@ -45,6 +47,13 @@ export function GeometryStep(props: { initial: GeometryInput; onNext(g: Geometry
         />
       </label>
       {!isLandscape() && <p class="error">Bitte das iPad quer halten.</p>}
+      {canFullscreen() && (
+        <p class="hint">
+          Am PC: Bitte vor dem Messen ins Vollbild wechseln. Das Training läuft später auch im Vollbild, und die Reizorte passen nur bei
+          gleicher Fenstergröße.{' '}
+          <button onClick={() => enterFullscreen()}>Vollbild</button>
+        </p>
+      )}
       {g && (
         <p class="hint">
           Links reicht das Bild bis {maxEccentricityDeg(g, 'L', 0).toFixed(1)}°, rechts bis {maxEccentricityDeg(g, 'R', 0).toFixed(1)}°.
