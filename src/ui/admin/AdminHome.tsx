@@ -22,7 +22,7 @@ const LINKS: ReadonlyArray<{ href: string; title: string; text: string }> = [
 
 export function AdminHome(props: { db: Db; voice: Voice; onLeave(): void }) {
   const [reminder, setReminder] = useState(false);
-  const [hasVoice, setHasVoice] = useState(() => props.voice.hasLocalGermanVoice());
+  const [hasVoice, setHasVoice] = useState(() => props.voice.hasGermanVoice());
 
   useEffect(() => {
     let alive = true;
@@ -39,8 +39,8 @@ export function AdminHome(props: { db: Db; voice: Voice; onLeave(): void }) {
 
   // Die Stimmenliste kommt auf iOS oft erst nach dem ersten Zeichnen
   useEffect(() => {
-    setHasVoice(props.voice.hasLocalGermanVoice());
-    return props.voice.onVoicesChanged(() => setHasVoice(props.voice.hasLocalGermanVoice()));
+    setHasVoice(props.voice.hasGermanVoice());
+    return props.voice.onVoicesChanged(() => setHasVoice(props.voice.hasGermanVoice()));
   }, [props.voice]);
 
   return (

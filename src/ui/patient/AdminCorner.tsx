@@ -1,35 +1,25 @@
-/** Unsichtbare Fläche oben rechts im Startbildschirm: 3 s gedrückt halten öffnet den Bereich für Angehörige. */
-import { useEffect, useRef } from 'preact/hooks';
+/** Zahnrad oben rechts im Startbildschirm: öffnet den Bereich für Angehörige (dahinter die PIN-Abfrage). */
 
-export const ADMIN_HOLD_MS = 3000;
-
-export function AdminCorner(props: { onLongPress(): void; holdMs?: number }) {
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const cancel = () => {
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = null;
-  };
-  useEffect(() => cancel, []);
-
+export function AdminCorner(props: { onOpen(): void }) {
   return (
-    <div
+    <button
       class="admin-corner"
-      role="button"
-      aria-label="Bereich für Angehörige"
-      onPointerDown={(e) => {
-        // Der Startbildschirm darf weder Druck noch Klick aus der Ecke sehen
+      aria-label="Einstellungen für Angehörige"
+      title="Einstellungen"
+      // Der Startbildschirm darf weder Druck noch Klick vom Zahnrad sehen (sonst startet das Training)
+      onPointerDown={(e) => e.stopPropagation()}
+      onPointerUp={(e) => e.stopPropagation()}
+      onClick={(e) => {
         e.stopPropagation();
-        cancel();
-        timer.current = setTimeout(() => {
-          timer.current = null;
-          props.onLongPress();
-        }, props.holdMs ?? ADMIN_HOLD_MS);
+        props.onOpen();
       }}
-      onPointerUp={cancel}
-      onPointerCancel={cancel}
-      onPointerLeave={cancel}
-      onClick={(e) => e.stopPropagation()}
-      onContextMenu={(e) => e.preventDefault()}
-    />
+    >
+      <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M19.14 12.94a7.07 7.07 0 0 0 0-1.88l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54A.5.5 0 0 0 13.9 2.5h-3.84a.5.5 0 0 0-.49.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.67 8.98a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0 0 1.88l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.49.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.49.42h3.84c.24 0 .45-.18.49-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7Z"
+        />
+      </svg>
+    </button>
   );
 }

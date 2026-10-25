@@ -22,6 +22,17 @@ describe('pickGermanVoice', () => {
     expect(r?.voice.name).toBe('Anna');
     expect(r?.local).toBe(true);
   });
+  it('bevorzugt am PC die natürlichen Online-Stimmen (Edge „Natural“), dann „Google Deutsch“, dann lokale', () => {
+    const hedda = voice('Microsoft Hedda - German (Germany)', 'de-DE', true);
+    const google = voice('Google Deutsch', 'de-DE', false);
+    const katja = voice('Microsoft Katja Online (Natural) - German (Germany)', 'de-DE', false);
+    expect(pickGermanVoice([hedda, google, katja])?.voice).toBe(katja);
+    expect(pickGermanVoice([hedda, google])?.voice).toBe(google);
+    expect(pickGermanVoice([hedda, google])?.local).toBe(false);
+    expect(pickGermanVoice([hedda])?.voice).toBe(hedda);
+    // englische Natural-Stimme zählt nicht
+    expect(pickGermanVoice([voice('Microsoft Aria Online (Natural)', 'en-US', false), hedda])?.voice).toBe(hedda);
+  });
   it('nimmt sonst eine lokale deutsche Stimme', () => {
     const r = pickGermanVoice([voice('Hans', 'de-AT', true)]);
     expect(r).toEqual({ voice: voice('Hans', 'de-AT', true), local: true });
@@ -201,6 +212,8 @@ describe('Voice', () => {
     await v.say('greeting');
     await v.speakText('x');
     expect(v.hasLocalGermanVoice()).toBe(false);
+    expect(v.hasGermanVoice()).toBe(false);
+    expect(v.germanVoiceName()).toBeNull();
     expect(() => v.unlock()).not.toThrow();
     expect(() => v.cancel()).not.toThrow();
   });

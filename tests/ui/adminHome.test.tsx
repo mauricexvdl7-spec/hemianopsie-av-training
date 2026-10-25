@@ -20,6 +20,8 @@ function fakeVoice(local: boolean) {
   const v = {
     local,
     hasLocalGermanVoice: () => v.local,
+    hasGermanVoice: () => v.local,
+    germanVoiceName: () => (v.local ? "Anna" : null),
     onVoicesChanged: (f: () => void) => {
       cb = f;
       return () => (cb = null);

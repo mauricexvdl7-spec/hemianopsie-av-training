@@ -56,8 +56,8 @@ export function PinStep(props: { existing: PinRecord | null; onNext(pin: PinReco
     <section class="card">
       <h1>PIN für Angehörige</h1>
       <p class="hint">
-        Die PIN schützt Einstellungen, Auswertung und Sicherung. Den Bereich öffnest du, indem du auf dem Startbildschirm die Ecke oben
-        rechts 3 Sekunden lang gedrückt hältst. Bitte die PIN gut merken.
+        Die PIN schützt Einstellungen, Auswertung und Sicherung. Den Bereich öffnest du, indem du auf dem Startbildschirm oben
+        rechts auf das Zahnrad tippst. Bitte die PIN gut merken.
       </p>
       {props.existing && <p class="hint">Es gibt schon eine PIN. Du kannst sie behalten oder eine neue festlegen.</p>}
       <PinInput label="Neue PIN (4 Ziffern)" value={pin} onInput={setPin} />

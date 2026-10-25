@@ -207,7 +207,7 @@ export function VoicePage(props: { db: Db; voice: Voice; audio: AudioEngine; onC
   const [drafts, setDrafts] = useState<Texts>({});
   const [clips, setClips] = useState<ReadonlyMap<AnnouncementKey, Clip>>(new Map());
   const [busy, setBusy] = useState<AnnouncementKey | null>(null);
-  const [hasVoice, setHasVoice] = useState(() => props.voice.hasLocalGermanVoice());
+  const [hasVoice, setHasVoice] = useState(() => props.voice.hasGermanVoice());
   const [note, setNote] = useState<string | null>(null);
   const canRecord = recordingSupported();
 
@@ -229,8 +229,8 @@ export function VoicePage(props: { db: Db; voice: Voice; audio: AudioEngine; onC
 
   // Die Stimmenliste kommt auf iOS oft erst nach dem ersten Zeichnen
   useEffect(() => {
-    setHasVoice(props.voice.hasLocalGermanVoice());
-    return props.voice.onVoicesChanged(() => setHasVoice(props.voice.hasLocalGermanVoice()));
+    setHasVoice(props.voice.hasGermanVoice());
+    return props.voice.onVoicesChanged(() => setHasVoice(props.voice.hasGermanVoice()));
   }, [props.voice]);
 
   const saveTexts = async () => {
@@ -296,10 +296,12 @@ export function VoicePage(props: { db: Db; voice: Voice; audio: AudioEngine; onC
           {note && <p>{note}</p>}
         </section>
 
-        {!hasVoice && (
+        {!hasVoice ? (
           <section class="card notice">
             <p>{NO_GERMAN_VOICE_TEXT}</p>
           </section>
+        ) : (
+          <p class="hint">Stimme: {props.voice.germanVoiceName()}</p>
         )}
 
         {loaded &&

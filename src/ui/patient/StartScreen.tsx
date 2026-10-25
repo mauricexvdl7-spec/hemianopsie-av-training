@@ -18,7 +18,7 @@ export function StartScreen(props: { onStart(): void; onAdmin(): void; now?: Dat
         </button>
         <div class="start-note">Lautstärke etwa halb</div>
       </div>
-      <AdminCorner onLongPress={() => props.onAdmin()} />
+      <AdminCorner onOpen={() => props.onAdmin()} />
     </div>
   );
 }

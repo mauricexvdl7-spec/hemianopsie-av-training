@@ -33,6 +33,8 @@ function fakeVoice(local = true) {
     cancel: vi.fn(),
     unlock: vi.fn(),
     hasLocalGermanVoice: () => local,
+    hasGermanVoice: () => local,
+    germanVoiceName: () => (local ? "Anna" : null),
     onVoicesChanged: () => () => undefined,
   };
 }

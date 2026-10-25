@@ -45,9 +45,15 @@ export interface VoiceLike {
 
 /** Deutsche Stimme in der Reihenfolge: lokal de-DE, lokal de-*, irgendeine de-*, sonst keine. */
 export function pickGermanVoice<V extends VoiceLike>(voices: readonly V[]): { voice: V; local: boolean } | null {
-  const isDe = (v: V) => v.lang.toLowerCase().startsWith('de');
+  const de = voices.filter((v) => v.lang.toLowerCase().startsWith('de'));
+  // Reihenfolge: natürliche Online-Stimmen (Edge „Natural“) klingen am besten, dann „Google Deutsch“ (Chrome),
+  // danach lokale Stimmen (iPad offline, Windows „Hedda“/„Katja“) – lokal de-DE vor anderen deutschen.
   const found =
-    voices.find((v) => v.localService && v.lang === 'de-DE') ?? voices.find((v) => v.localService && isDe(v)) ?? voices.find(isDe);
+    de.find((v) => /natural|neural/i.test(v.name)) ??
+    de.find((v) => /google/i.test(v.name)) ??
+    de.find((v) => v.localService && v.lang === 'de-DE') ??
+    de.find((v) => v.localService) ??
+    de[0];
   return found ? { voice: found, local: found.localService } : null;
 }
 
@@ -110,6 +116,16 @@ export class Voice {
     } catch {
       // nichts zu tun
     }
+  }
+
+  /** Irgendeine deutsche Stimme vorhanden (lokal oder online). */
+  hasGermanVoice(): boolean {
+    return this.german() !== null;
+  }
+
+  /** Name der Stimme, die gerade spricht; null ohne deutsche Stimme. */
+  germanVoiceName(): string | null {
+    return this.german()?.voice.name ?? null;
   }
 
   hasLocalGermanVoice(): boolean {

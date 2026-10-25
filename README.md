@@ -58,7 +58,7 @@ Die Texte der Ansagen kannst du ändern oder durch eigene Aufnahmen ersetzen (si
 
 ## Bereich für Angehörige
 
-**Zugang.** Auf dem Startbildschirm die Ecke oben rechts 3 Sekunden lang gedrückt halten. Die Fläche ist unsichtbar und etwa 64 × 64 Punkte groß. Dann die 4-stellige PIN eingeben. Bei falscher PIN erscheint „Falsche PIN.“ und du kannst es neu versuchen. Es gibt keine Sperre. Der Bereich sperrt sich wieder, wenn du „Zurück zum Training“ wählst oder die App neu lädst.
+**Zugang.** Auf dem Startbildschirm oben rechts auf das **Zahnrad** tippen bzw. klicken. Dann die 4-stellige PIN eingeben. Bei falscher PIN erscheint „Falsche PIN.“ und du kannst es neu versuchen. Es gibt keine Sperre. Der Bereich sperrt sich wieder, wenn du „Zurück zum Training“ wählst oder die App neu lädst.
 
 **Die PIN aufschreiben.** Ohne PIN gibt es keinen Zugang zu Einstellungen, Auswertung und Export. Die PIN steht nicht in der Sicherung.
 
