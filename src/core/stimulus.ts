@@ -6,15 +6,16 @@
 export const LEVEL_COUNT = 12;
 export const REFERENCE_LEVEL = 6;
 export const CONTRAST_MIN = 0.05;
-export const CONTRAST_CAP = 4.0;
-export const SIGMA_BASE_DEG = 0.5;
+/** Deckel 12: hellstes Licht etwa sRGB 200 auf #3c3c3c – am PC-Monitor gut sichtbar, kein reines Weiß (Nutzer 25.10.2026; vorher 4,0 ≈ sRGB 131). */
+export const CONTRAST_CAP = 12;
+export const SIGMA_BASE_DEG = 0.75;
 export const SIGMA_MAX_DEG = 1.5;
 export const BG_SRGB = 0x3c;
 export const RAMP_MS = 150;
 /** Standard-Plateau; einstellbar über `TimingSettings.plateauMs` (siehe timing.ts). */
 export const PLATEAU_MS = 700;
 
-/** Stufen 0–8: Kontrast logarithmisch von 0,05 bis 4,0 bei σ = 0,5°. Stufen 9–11: Kontrast 4,0, σ wächst bis 1,5°. */
+/** Stufen 0–8: Kontrast logarithmisch von 0,05 bis 12 bei σ = 0,75°. Stufen 9–11: Kontrast 12, σ wächst bis 1,5°. */
 export function levelParams(level: number): { contrast: number; sigmaDeg: number } {
   if (!Number.isInteger(level) || level < 0 || level >= LEVEL_COUNT) {
     throw new RangeError(`Ungültige Reizstufe: ${level}`);
@@ -22,7 +23,7 @@ export function levelParams(level: number): { contrast: number; sigmaDeg: number
   if (level <= 8) {
     return { contrast: CONTRAST_MIN * (CONTRAST_CAP / CONTRAST_MIN) ** (level / 8), sigmaDeg: SIGMA_BASE_DEG };
   }
-  return { contrast: CONTRAST_CAP, sigmaDeg: SIGMA_BASE_DEG * 3 ** ((level - 8) / 3) };
+  return { contrast: CONTRAST_CAP, sigmaDeg: SIGMA_BASE_DEG * (SIGMA_MAX_DEG / SIGMA_BASE_DEG) ** ((level - 8) / 3) };
 }
 
 /** Hüllkurve 0..1: Cosinus-Rampe hoch, Plateau, Cosinus-Rampe runter; außerhalb 0. */

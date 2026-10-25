@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { runTrial } from '../../src/ui/runner';
+import { levelParams } from '../../src/core/stimulus';
 import { samplePlan } from '../helpers/plans';
 import { fakeDeps } from '../helpers/fakeRunner';
 
@@ -19,8 +20,8 @@ describe('runTrial', () => {
     expect(f.deps.scheduleSound).toHaveBeenCalledTimes(1);
     expect(f.deps.scheduleSound).toHaveBeenCalledWith(plan, T0);
     expect(r.startedAtIso).toBe(ISO);
-    expect(r.contrast).toBeCloseTo(0.05 * 80 ** (6 / 8));
-    expect(r.sigmaDeg).toBe(0.5);
+    expect(r.contrast).toBeCloseTo(levelParams(6).contrast);
+    expect(r.sigmaDeg).toBe(levelParams(6).sigmaDeg);
     expect(r.stimulusPx!.x).toBeLessThan(800);
   });
 

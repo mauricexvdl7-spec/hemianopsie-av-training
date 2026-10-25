@@ -7,6 +7,8 @@ import {
   renderBlobPatch,
   LEVEL_COUNT,
   REFERENCE_LEVEL,
+  CONTRAST_CAP,
+  BG_SRGB,
 } from '../../src/core/stimulus';
 
 describe('Reizstufen', () => {
@@ -17,15 +19,22 @@ describe('Reizstufen', () => {
 
   it('Stufe 0 und 8', () => {
     expect(levelParams(0).contrast).toBeCloseTo(0.05);
-    expect(levelParams(0).sigmaDeg).toBe(0.5);
-    expect(levelParams(8).contrast).toBeCloseTo(4.0);
-    expect(levelParams(8).sigmaDeg).toBe(0.5);
+    expect(levelParams(0).sigmaDeg).toBe(0.75);
+    expect(levelParams(8).contrast).toBeCloseTo(12);
+    expect(levelParams(8).sigmaDeg).toBe(0.75);
   });
 
   it('Stufe 11 = Deckel', () => {
     const p = levelParams(11);
-    expect(p.contrast).toBeCloseTo(4.0);
+    expect(p.contrast).toBeCloseTo(12);
     expect(p.sigmaDeg).toBeCloseTo(1.5);
+  });
+
+  it('hellstes Licht etwa 200 von 255 (gut sichtbar am Monitor, aber kein reines Weiß, dunkler als der Text #e0e0e0)', () => {
+    const peak = linearToSrgb(srgbToLinear(BG_SRGB) * (1 + CONTRAST_CAP));
+    expect(peak).toBeGreaterThan(195);
+    expect(peak).toBeLessThan(205);
+    expect(peak).toBeLessThan(0xe0);
   });
 
   it('Stufen monoton', () => {

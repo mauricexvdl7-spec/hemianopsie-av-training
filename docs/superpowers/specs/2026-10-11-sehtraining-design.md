@@ -88,7 +88,7 @@ src/
 
 **Reizstufen:**
 - 12 Stufen L = 0…11, logarithmisch abgestuft.
-- Stufen 0–8 erhöhen den Kontrast (Weber-Kontrast von etwa 0,05 bis zum Deckel), σ bleibt 0,5°.
+- Stufen 0–8 erhöhen den Kontrast (Weber-Kontrast von etwa 0,05 bis zum Deckel 12, hellstes Licht etwa sRGB 200), σ bleibt 0,75° (Entscheidung 13).
 - Stufen 9–11 lassen σ bis 1,5° wachsen, der Kontrast bleibt am Deckel.
 - Die Tabelle steht in `core/stimulus` und ist konfigurierbar.
 
@@ -375,3 +375,6 @@ Nach jedem Meilenstein: Commit, Push, kurzer Bericht an den Angehörigen, README
 - Mehrere Patienten.
 - Diagnosen, Normwerte oder Aussagen über das Gesichtsfeld im medizinischen Sinn.
 - Steuerung von Stimulationsgeräten.
+
+13. Lichter heller (Nutzer, 25.10.2026, Training jetzt am PC mit 32-Zoll-Monitor, 70 cm Abstand, Webcam oben): Die Lichter waren selbst für Gesunde kaum zu sehen (hellstes Licht nur etwa sRGB 131). Kontrastdeckel 4 → 12 (hellstes Licht etwa sRGB 200, kein reines Weiß), Grundgröße σ 0,5° → 0,75° (größte Stufe weiter 1,5°). Zugang zum PIN-Bereich über ein sichtbares Zahnrad statt der unsichtbaren Ecke; natürliche Online-Stimmen werden bevorzugt.
+
